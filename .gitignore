@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+backend/.venv/
+backend/data/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Office/LibreOffice
+.~lock.*#
+*.tmp
+*.tsbuildinfo
