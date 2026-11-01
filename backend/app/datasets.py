@@ -167,6 +167,40 @@ def _airline(params: dict):
                   "note": "série normalizada (z-score); janelas de 12 meses"}
 
 
+TEMPS_URL = "https://raw.githubusercontent.com/jbrownlee/Datasets/master/daily-min-temperatures.csv"
+
+
+def _daily_min_temp(params: dict):
+    """Temperatura mínima diária em Melbourne (1981-1990, 3650 dias, Australian Bureau of Meteorology).
+
+    Exemplo da Aula 3: "previsão do tempo a partir do histórico climático".
+    Entrada: últimos `window` dias (z-score). Alvo: temperatura do dia t+`horizon`, em °C,
+    para que RMSE/MAE fiquem diretamente interpretáveis em graus."""
+    import urllib.request
+
+    path = db.DATA_DIR / "downloads" / "daily-min-temperatures.csv"
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(TEMPS_URL, timeout=30) as r:
+            path.write_bytes(r.read())
+    with path.open(newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))[1:]
+    dates = [r[0] for r in rows]
+    temps = np.array([float(r[1]) for r in rows], dtype=np.float32)
+    window, horizon = int(params.get("window", 30)), int(params.get("horizon", 1))
+    mu, sd = float(temps.mean()), float(temps.std())
+    X, _ = _windows((temps - mu) / sd, window, horizon)
+    _, y = _windows(temps, window, horizon)
+    last = temps[window - 1: window - 1 + len(y)]  # último dia observado de cada janela
+    naive_rmse = float(np.sqrt(np.mean((y - last) ** 2)))
+    return X, y, {"task": "sequence_regression", "feature_names": ["temp_min_C"], "unit": "°C",
+                  "baseline_persistence_rmse": round(naive_rmse, 3),
+                  "baseline_note": "RMSE do modelo ingênuo 'amanhã = último dia observado'; a rede precisa ficar abaixo disso",
+                  "scale": {"mean": mu, "std": sd}, "period": f"{dates[0]} a {dates[-1]}", "source_url": TEMPS_URL,
+                  "note": f"entrada: {window} dias anteriores (z-score); alvo: temperatura mínima em °C "
+                          f"{horizon} dia(s) à frente"}
+
+
 def _seq_parity(params: dict):
     """Classificação de sequências: a sequência de bits tem número par de 1s?
 
@@ -195,6 +229,7 @@ BUILTIN: dict[str, dict[str, Any]] = {
     "fashion_mnist": {"gen": _torchvision("FashionMNIST"), "aula": 2, "desc": "Fashion-MNIST 28x28 (download na 1ª vez). Params: n_samples."},
     "sine_series": {"gen": _sine_series, "aula": 3, "desc": "Série temporal (soma de senoides + ruído) em janelas. Params: length, window, noise."},
     "airline_passengers": {"gen": _airline, "aula": 3, "desc": "Série real de passageiros aéreos (1949-1960), janelas de 12 meses."},
+    "daily_min_temperatures": {"gen": _daily_min_temp, "aula": 3, "desc": "Histórico climático real: temperatura mínima diária em Melbourne (1981-1990, 3650 dias). Prever a temperatura de amanhã a partir dos últimos dias (download ~70 KB na 1ª vez). Params: window (padrão 30), horizon (padrão 1)."},
     "sequence_parity": {"gen": _seq_parity, "aula": 3, "desc": "Paridade de sequências de bits (memória longa). Params: n_samples, length."},
 }
 

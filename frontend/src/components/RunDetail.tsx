@@ -27,6 +27,12 @@ export default function RunDetail({ runId, project, liveRun, onDeleted }: { runI
   const metricCards: [string, string][] = [];
   if (m.accuracy !== undefined) metricCards.push(["acurácia", `${(m.accuracy * 100).toFixed(1)}%`]);
   for (const k of ["r2", "rmse", "mae", "reconstruction_mse", "anomaly_threshold_p95"]) if (m[k] !== undefined) metricCards.push([k, fmt(m[k])]);
+  const baseline = (ds?.meta as any)?.baseline_persistence_rmse;
+  if (baseline !== undefined && m.rmse !== undefined) {
+    const unit = (ds?.meta as any)?.unit ?? "";
+    metricCards.push(["rmse ingênuo (amanhã = hoje)", `${fmt(baseline)} ${unit}`]);
+    metricCards.push(["ganho sobre o ingênuo", `${(((baseline - m.rmse) / baseline) * 100).toFixed(1)}%`]);
+  }
   if (m.n_params !== undefined) metricCards.push(["parâmetros", m.n_params.toLocaleString("pt-BR")]);
   if (m.train_seconds !== undefined) metricCards.push(["tempo", `${m.train_seconds}s`]);
   if (h.length) metricCards.push(["épocas", String(h.length)]);
@@ -133,6 +139,7 @@ export default function RunDetail({ runId, project, liveRun, onDeleted }: { runI
             <LineChart
               title="Série · real x previsto (1 passo à frente)"
               height={220}
+              xLabel="amostra"
               series={[
                 { name: "real", values: x.plot.y_true, color: PALETTE[0] },
                 { name: "previsto", values: x.plot.y_pred, color: PALETTE[1] },

@@ -40,7 +40,7 @@ chamando ferramentas operam exatamente o mesmo estado — por isso o que o Claud
 |---|---|---|
 | 1 | **Perceptron** (regra `w += η(y−ŷ)x`, em NumPy), **Adaline** (Regra Delta, em NumPy), **MLP** | `and_gate`, `or_gate`, `xor_gate`, `blobs`, `moons`, `circles`, `iris`, `wine`, `breast_cancer`, `diabetes`, `sine_regression` |
 | 2 | **CNN** (kernel, stride, padding same/valid, pooling max/avg, flatten, dense) | `digits` (8×8, offline), `mnist`, `fashion_mnist` (download na 1ª vez) |
-| 3 | **RNN, LSTM, GRU**, **Transformer** (encoder, self-attention), **Autoencoder** (basic, denoising, sparse, variational), **GAN** | `sine_series`, `airline_passengers`, `sequence_parity`, + imagens/tabulares acima |
+| 3 | **RNN, LSTM, GRU**, **Transformer** (encoder, self-attention), **Autoencoder** (basic, denoising, sparse, variational), **GAN** | `daily_min_temperatures` (histórico climático real), `sine_series`, `airline_passengers`, `sequence_parity`, + imagens/tabulares acima |
 
 Também é possível importar **CSV** (upload na interface ou `import_csv` pelo chat).
 
@@ -84,7 +84,9 @@ Para inspecionar o servidor isoladamente: `npx @modelcontextprotocol/inspector b
 1. **Aula 1** — *"Crie um projeto 'Aula 1', adicione and_gate e xor_gate e mostre que o perceptron resolve AND mas não XOR."*
    Depois: *"Agora treine um MLP com 4 neurônios tanh no XOR."* Compare as fronteiras de decisão.
 2. **Aula 2** — *"Adicione digits e compare um MLP com uma CNN pequena."* Discuta parâmetros × acurácia.
-3. **Aula 3** — *"Compare RNN, LSTM e GRU em sequence_parity com length 20."* (gradiente que desaparece);
+3. **Aula 3** — *"Use o histórico climático (daily_min_temperatures) para prever a temperatura de amanhã com LSTM e GRU;
+   compare com o modelo ingênuo."* (a base traz o RMSE de "amanhã = hoje" como referência);
+   *"Compare RNN, LSTM e GRU em sequence_parity com length 20."* (gradiente que desaparece);
    *"Autoencoder com latente 2D em digits, depois denoising"*; *"GAN em moons"*.
 4. **Harness** — abra a aba Harness e mostre o comando, o system prompt, as ferramentas e o log de eventos.
    Experimente remover uma ferramenta do servidor ou mudar o system prompt e veja o comportamento do agente mudar.

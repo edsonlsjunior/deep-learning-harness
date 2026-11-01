@@ -9,15 +9,17 @@ export function LineChart({
   height = 180,
   title,
   yLabel,
+  xLabel = "época",
 }: {
   series: { name: string; values: number[]; color: string; dashed?: boolean }[];
   height?: number;
   title?: string;
   yLabel?: string;
+  xLabel?: string;
 }) {
   const W = 520;
   const H = height;
-  const pad = { l: 46, r: 12, t: 22, b: 24 };
+  const pad = { l: 46, r: 12, t: title ? 38 : 26, b: 24 };
   const all = series.flatMap((s) => s.values).filter((v) => Number.isFinite(v));
   const n = Math.max(...series.map((s) => s.values.length), 1);
   if (!all.length) return <div className="muted small">sem dados ainda…</div>;
@@ -46,7 +48,7 @@ export function LineChart({
         </g>
       ))}
       <text x={W - pad.r} y={H - 6} textAnchor="end" className="tick">
-        época {n}
+        {xLabel} {n}
       </text>
       {yLabel && (
         <text x={10} y={H / 2} className="tick" transform={`rotate(-90 10 ${H / 2})`} textAnchor="middle">
@@ -64,7 +66,7 @@ export function LineChart({
         />
       ))}
       {series.map((s, i) => (
-        <g key={s.name} transform={`translate(${W - pad.r - 110 * (series.length - i)}, 8)`}>
+        <g key={s.name} transform={`translate(${W - pad.r - 110 * (series.length - i)}, ${title ? 18 : 4})`}>
           <rect width={10} height={3} y={4} fill={s.color} />
           <text x={14} y={9} className="tick">
             {s.name}

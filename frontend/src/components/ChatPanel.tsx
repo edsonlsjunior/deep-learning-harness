@@ -14,6 +14,7 @@ const SUGGESTIONS = [
   "Crie um projeto 'Aula 1', adicione as bases and_gate e xor_gate e mostre que o perceptron resolve AND mas não XOR.",
   "Neste projeto, adicione a base xor_gate e treine um MLP com uma camada oculta de 4 neurônios tanh. Explique por que funciona.",
   "Adicione a base digits e compare um MLP com uma CNN pequena. Qual tem menos parâmetros e mais acurácia?",
+  "Use o histórico climático (daily_min_temperatures) para prever a temperatura mínima de amanhã: compare RNN, LSTM e GRU e o modelo ingênuo.",
   "Compare RNN, LSTM e GRU na base sequence_parity com sequências de tamanho 20.",
   "Treine um autoencoder com latente 2D na base digits e depois uma versão denoising. O que muda?",
   "Treine uma GAN na base moons e comente as curvas do discriminador e do gerador.",

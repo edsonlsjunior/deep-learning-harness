@@ -308,6 +308,20 @@ function DatasetPreview({ id }: { id: number }) {
             <b>{m.n_classes}</b>
           </div>
         )}
+        {m.baseline_persistence_rmse !== undefined && (
+          <div className="stat">
+            <span>rmse ingênuo (amanhã = hoje)</span>
+            <b>
+              {fmt(m.baseline_persistence_rmse)} {m.unit ?? ""}
+            </b>
+          </div>
+        )}
+        {m.period && (
+          <div className="stat">
+            <span>período</span>
+            <b style={{ fontSize: "0.95rem" }}>{m.period}</b>
+          </div>
+        )}
         {m.target_stats && (
           <div className="stat">
             <span>alvo (média ± dp)</span>
@@ -333,7 +347,7 @@ function DatasetPreview({ id }: { id: number }) {
         </div>
       )}
       {p.sequences && (
-        <LineChart title="Janelas (entrada) — cada linha é uma amostra" series={p.sequences.slice(0, 5).map((s: any, i: number) => ({ name: `y=${fmt(s.y)}`, values: s.x, color: PALETTE[i] }))} />
+        <LineChart xLabel="passo" title="Janelas (entrada) — cada linha é uma amostra" series={p.sequences.slice(0, 5).map((s: any, i: number) => ({ name: `y=${fmt(s.y)}`, values: s.x, color: PALETTE[i] }))} />
       )}
       {p.rows && (
         <table className="runs">

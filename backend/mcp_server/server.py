@@ -127,7 +127,7 @@ async def delete_project(project_id: int) -> str:
 async def add_dataset(project_id: int, source: str, name: str | None = None,
                       params: dict[str, Any] | None = None) -> str:
     """Adiciona uma base embutida ao projeto. `source` vem de `list_dataset_sources`
-    (ex.: xor_gate, moons, iris, digits, mnist, sine_series, airline_passengers, sequence_parity).
+    (ex.: xor_gate, moons, iris, digits, mnist, daily_min_temperatures, sine_series, airline_passengers, sequence_parity).
     `params` opcionais dependem da base, ex.: {"n_samples": 500, "noise": 0.2} ou {"window": 20}."""
     body = {"source": source, "name": name, "params": params or {}}
     d = await call("POST", f"/api/projects/{project_id}/datasets", json=body)
@@ -264,7 +264,7 @@ def guia() -> str:
 | 1 | perceptron, adaline | and_gate, or_gate, blobs, iris | Perceptron resolve AND/OR mas falha no XOR |
 | 1 | mlp | xor_gate, moons, circles, breast_cancer, diabetes | MLP com 1 camada oculta resolve XOR |
 | 2 | cnn | digits, mnist, fashion_mnist | CNN x MLP em imagens (parâmetros x acurácia) |
-| 3 | rnn, lstm, gru | sine_series, airline_passengers, sequence_parity | RNN simples x LSTM em memória longa |
+| 3 | rnn, lstm, gru | daily_min_temperatures, sine_series, airline_passengers, sequence_parity | previsão do tempo com histórico climático; RNN simples x LSTM em memória longa |
 | 3 | transformer | sine_series, sequence_parity | self-attention x recorrência |
 | 3 | autoencoder | digits, mnist | latente 2D, denoising, detecção de anomalias |
 | 3 | gan | moons, digits | gerador x discriminador |
