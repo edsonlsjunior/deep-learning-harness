@@ -106,8 +106,7 @@ backend/
     server.py         servidor MCP stdio (ferramentas para o agente)
   data/               banco, bases (.npz), artefatos (.pt) — gerado em runtime
 frontend/
-  src/                React + TypeScript (Vite); tema derivado de Redes_Neurais_Lab_Offline.html
-docs/pdf/             slides das aulas em PDF
+  src/                React + TypeScript (Vite); tema derivado do material interativo da disciplina
 ```
 
 ## Notas
