@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../api";
+import { DATA_ACCEPT, api } from "../api";
 import type { Architecture, CatalogEntry, Dataset, Project, Run } from "../types";
 import { ARCH_LABEL, TASK_LABEL, archTheme, taskTheme } from "../theme";
 import { GrayImage, LineChart, PALETTE, Sparkline, fmt } from "./Charts";
@@ -81,7 +81,7 @@ export default function ProjectView({ project, archs, catalog, refresh, onDelete
         <>
           <div className="spread" style={{ marginBottom: 14 }}>
             <p className="muted small" style={{ margin: 0 }}>
-              Bases embutidas (offline) ou CSV próprio. Clique numa base para ver exemplos.
+              Bases embutidas (offline), arquivo próprio ou Kaggle (pelo chat). Clique numa base para ver exemplos.
             </p>
             <button className="btn primary" onClick={() => setModal("dataset")}>
               + Adicionar base
@@ -413,13 +413,13 @@ function DatasetModal({ project, catalog, close, done }: { project: Project; cat
     try {
       if (mode === "builtin") await api.addDataset(project.id, source, name || null, parseJson(params));
       else {
-        if (!file) throw new Error("Escolha um arquivo CSV");
+        if (!file) throw new Error("Escolha um arquivo");
         const f = new FormData();
         f.append("file", file);
         f.append("target_column", target);
         f.append("task", task);
         f.append("name", name);
-        await api.uploadCsv(project.id, f);
+        await api.uploadFile(project.id, f);
       }
       done();
       close();
@@ -438,7 +438,7 @@ function DatasetModal({ project, catalog, close, done }: { project: Project; cat
             Base embutida
           </button>
           <button className={`btn ${mode === "csv" ? "secondary" : "ghost"}`} onClick={() => setMode("csv")}>
-            Upload CSV
+            Upload de arquivo
           </button>
         </div>
         {mode === "builtin" ? (
@@ -468,8 +468,8 @@ function DatasetModal({ project, catalog, close, done }: { project: Project; cat
         ) : (
           <>
             <label className="field">
-              Arquivo CSV
-              <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+              Arquivo (CSV, TSV, JSON, Excel, Parquet ou NPZ)
+              <input type="file" accept={DATA_ACCEPT} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </label>
             <div className="form-row">
               <label className="field">

@@ -21,7 +21,7 @@ O modelo de linguagem, sozinho, só recebe texto e devolve texto. O **harness** 
 | Peça do harness | Onde está neste projeto |
 |---|---|
 | **Loop agêntico** (modelo → ferramenta → resultado → modelo …) | Claude Code em modo headless (`claude -p`) |
-| **Ferramentas** que o agente pode usar | `backend/mcp_server/server.py` (18 ferramentas MCP) |
+| **Ferramentas** que o agente pode usar | `backend/mcp_server/server.py` (22 ferramentas MCP) |
 | **Transporte** das ferramentas | MCP via **stdio**: o Claude Code inicia o servidor como subprocesso |
 | **Contexto / instruções** | `--append-system-prompt` em `backend/app/chat.py` (conteúdo das aulas + regras) |
 | **Permissões / sandbox** | `--tools ""` (sem Bash/Edit/Read), `--allowedTools mcp__dl-lab`, `--permission-mode dontAsk`, `cwd` isolado |
@@ -42,7 +42,18 @@ chamando ferramentas operam exatamente o mesmo estado — por isso o que o Claud
 | 2 | **CNN** (kernel, stride, padding same/valid, pooling max/avg, flatten, dense) | `digits` (8×8, offline), `mnist`, `fashion_mnist` (download na 1ª vez) |
 | 3 | **RNN, LSTM, GRU**, **Transformer** (encoder, self-attention), **Autoencoder** (basic, denoising, sparse, variational), **GAN** | `daily_min_temperatures` (histórico climático real), `sine_series`, `airline_passengers`, `sequence_parity`, + imagens/tabulares acima |
 
-Também é possível importar **CSV** (upload na interface ou `import_csv` pelo chat).
+### Bases próprias e do Kaggle
+
+- **Upload pelo chat**: botão **📎 Anexar** (ou arraste o arquivo para o painel). Formatos: `.csv`, `.tsv`, `.txt`
+  (separador `,` `;` TAB detectado, decimal com vírgula aceito), `.json`/`.jsonl` (lista de registros), `.xlsx`/`.xls`,
+  `.parquet` e `.npz` (arrays `X` e `y` prontos — inclusive imagens `(N,C,H,W)` e séries `(N,T,F)`); até 200 MB.
+  O arquivo é enviado ao backend e a mensagem leva o caminho e o resumo das colunas; o Claude escolhe a coluna alvo e
+  a tarefa (ferramentas `inspect_file` e `import_file`). O mesmo upload existe no botão "Adicionar base" do projeto.
+- **Kaggle**: botão **🔍 Kaggle** no chat busca bases públicas e manda o Claude importar a escolhida; ou peça direto
+  (*"procure no Kaggle uma base de doenças cardíacas e importe"*). Ferramentas: `search_kaggle`, `kaggle_dataset_files`,
+  `download_kaggle_dataset`. Bases públicas funcionam **sem login**; credenciais são opcionais
+  (`~/.kaggle/kaggle.json`, `~/.kaggle/access_token`, `KAGGLE_USERNAME`+`KAGGLE_KEY` ou `KAGGLE_API_TOKEN`).
+  Downloads ficam em `backend/data/downloads/kaggle/` (limite 200 MB por base; tabelas grandes podem ser amostradas com `max_rows`).
 
 Visualizações por treino: curvas de perda/acurácia por época (ao vivo), matriz de confusão, **fronteira de decisão** (bases 2D),
 curva ajustada (regressão 1D), série real × prevista, **espaço latente** e reconstruções (autoencoders), amostras geradas e
@@ -100,7 +111,9 @@ backend/
     chat.py           ponte com o Claude Code (o harness): subprocesso + stream-json → SSE
     architectures.py  zoológico de modelos (NumPy + PyTorch)
     training.py       treino em threads, métricas, visualizações, predição/geração
-    datasets.py       bases embutidas + CSV
+    datasets.py       bases embutidas + importação de arquivos
+    files.py          leitura de CSV/TSV/JSON/Excel/Parquet/NPZ
+    kaggle.py         busca e download de bases do Kaggle
     db.py             SQLite (data/lab.sqlite3)
   mcp_server/
     server.py         servidor MCP stdio (ferramentas para o agente)

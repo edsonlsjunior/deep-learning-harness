@@ -1,13 +1,36 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { api, streamChat } from "../api";
-import type { ChatEvent, Project } from "../types";
+import { DATA_ACCEPT, api, streamChat } from "../api";
+import type { ChatEvent, FileInfo, KaggleDataset, Project } from "../types";
 
 type Part = { kind: "text"; text: string } | { kind: "tool"; id: string; name: string; input: unknown; result?: string; isError?: boolean };
 interface Msg {
   role: "user" | "assistant";
   parts: Part[];
   footer?: string;
+  attachment?: { filename: string; summary: string };
+}
+
+/** Resumo do arquivo anexado que vai junto da mensagem: o Claude já sabe caminho e colunas. */
+function describeAttachment(f: FileInfo) {
+  const cols = f.columns
+    ?.slice(0, 40)
+    .map((c) => `${c.name} (${c.kind === "numeric" ? "num" : "cat"}, ${c.n_unique} únicos${c.n_missing ? `, ${c.n_missing} faltantes` : ""})`)
+    .join("; ");
+  return [
+    `[Arquivo anexado: ${f.filename}`,
+    `caminho no servidor: ${f.path}`,
+    `formato ${f.format}, ${f.size_kb} KB, ${attachmentLabel(f)}`,
+    cols ? `colunas: ${cols}${(f.columns?.length ?? 0) > 40 ? "; …" : ""}]` : "]",
+  ].join("\n");
+}
+
+function attachmentLabel(f: FileInfo) {
+  return f.arrays
+    ? Object.entries(f.arrays)
+        .map(([k, a]) => `${k} ${a.shape.join("×")}`)
+        .join(" · ")
+    : `${f.n_rows} linhas × ${f.n_columns} colunas`;
 }
 
 const SUGGESTIONS = [
@@ -35,6 +58,12 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
   const [model, setModel] = useState(() => localStorage.getItem("dl.model") ?? "");
   const [events, setEvents] = useState<ChatEvent[]>([]);
   const [init, setInit] = useState<Extract<ChatEvent, { type: "init" }> | null>(null);
+  const [attachment, setAttachment] = useState<FileInfo | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const [kaggleOpen, setKaggleOpen] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const abort = useRef<AbortController | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   // o stream vive por vários renders: guardamos sempre o callback mais recente
@@ -95,12 +124,31 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
     if (ev.type === "tool_result") onToolResultRef.current(); // o Claude mudou algo -> recarrega a UI
   }
 
+  async function attach(file: File) {
+    setUploadErr("");
+    setUploading(true);
+    try {
+      setAttachment(await api.stageUpload(file));
+    } catch (e: any) {
+      setUploadErr(e.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function send(text?: string) {
-    const message = (text ?? input).trim();
-    if (!message || busy) return;
+    const att = text === undefined ? attachment : null; // sugestões/Kaggle não levam o anexo
+    let typed = (text ?? input).trim();
+    if (!typed && att) typed = "Importe este arquivo como base de dados no projeto atual e descreva-o.";
+    if (!typed || busy || uploading) return;
+    const message = att ? `${typed}\n\n${describeAttachment(att)}` : typed;
     setInput("");
+    if (att) setAttachment(null);
+    setKaggleOpen(false);
     setBusy(true);
-    setMsgs((m) => [...m, { role: "user", parts: [{ kind: "text", text: message }] }, { role: "assistant", parts: [] }]);
+    const userMsg: Msg = { role: "user", parts: [{ kind: "text", text: typed }] };
+    if (att) userMsg.attachment = { filename: att.filename, summary: attachmentLabel(att) };
+    setMsgs((m) => [...m, userMsg, { role: "assistant", parts: [] }]);
     abort.current = new AbortController();
     try {
       await streamChat({ message, session_id: sessionId, project_id: project?.id ?? null, model: model || null }, apply, abort.current.signal);
@@ -120,7 +168,24 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
   }
 
   return (
-    <aside className="chat">
+    <aside
+      className={`chat ${dragOver ? "drag" : ""}`}
+      onDragOver={(e) => {
+        if (view !== "chat" || !e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const f = e.dataTransfer.files?.[0];
+        if (f && view === "chat") attach(f);
+      }}
+    >
+      {dragOver && <div className="drop-hint">Solte o arquivo para anexar ao chat</div>}
       <div className="chat-head">
         <div className="spread">
           <div>
@@ -166,6 +231,13 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
             )}
             {msgs.map((m, i) => (
               <div key={i} className={`msg ${m.role}`}>
+                {m.attachment && (
+                  <div className="att-chip in-msg">
+                    <span>📎</span>
+                    <b>{m.attachment.filename}</b>
+                    <span className="att-meta">{m.attachment.summary}</span>
+                  </div>
+                )}
                 {m.parts.map((p, j) =>
                   p.kind === "text" ? (
                     m.role === "user" ? (
@@ -189,8 +261,59 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
             ))}
           </div>
           <div className="chat-input">
+            {kaggleOpen && <KagglePanel onPick={(msg) => send(msg)} close={() => setKaggleOpen(false)} disabled={busy} />}
+            {(attachment || uploading || uploadErr) && (
+              <div className={`att-chip ${uploadErr ? "err" : ""}`}>
+                {uploading ? (
+                  <>
+                    <span className="spinner" /> enviando arquivo…
+                  </>
+                ) : uploadErr ? (
+                  <>
+                    <span>✕</span> {uploadErr}
+                  </>
+                ) : (
+                  attachment && (
+                    <>
+                      <span>📎</span>
+                      <b>{attachment.filename}</b>
+                      <span className="att-meta">{attachmentLabel(attachment)}</span>
+                    </>
+                  )
+                )}
+                {!uploading && (
+                  <button
+                    className="att-x"
+                    title="Remover"
+                    onClick={() => {
+                      setAttachment(null);
+                      setUploadErr("");
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            )}
+            <input
+              ref={fileInput}
+              type="file"
+              accept={DATA_ACCEPT}
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) attach(f);
+                e.target.value = "";
+              }}
+            />
             <textarea
-              placeholder={project ? `Peça algo sobre "${project.name}"…` : "Ex.: crie um projeto e treine um perceptron no AND"}
+              placeholder={
+                attachment
+                  ? "Diga o que fazer com o arquivo (ex.: alvo = Survived) ou só envie"
+                  : project
+                    ? `Peça algo sobre "${project.name}"…`
+                    : "Ex.: crie um projeto e treine um perceptron no AND"
+              }
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -201,18 +324,35 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
               }}
             />
             <div className="spread" style={{ marginTop: 8 }}>
-              <select value={model} onChange={(e) => setModel(e.target.value)} title="Modelo usado pelo Claude Code">
-                <option value="">modelo padrão</option>
-                <option value="opus">opus</option>
-                <option value="sonnet">sonnet</option>
-                <option value="haiku">haiku</option>
-              </select>
+              <div className="row" style={{ gap: 6 }}>
+                <select value={model} onChange={(e) => setModel(e.target.value)} title="Modelo usado pelo Claude Code">
+                  <option value="">modelo padrão</option>
+                  <option value="opus">opus</option>
+                  <option value="sonnet">sonnet</option>
+                  <option value="haiku">haiku</option>
+                </select>
+                <button
+                  className="btn dark-ghost sm"
+                  onClick={() => fileInput.current?.click()}
+                  disabled={busy || uploading}
+                  title="Anexar base de dados: CSV, TSV, TXT, JSON, JSONL, Excel, Parquet ou NPZ (também dá para arrastar e soltar)"
+                >
+                  📎 Anexar
+                </button>
+                <button
+                  className={`btn dark-ghost sm ${kaggleOpen ? "on" : ""}`}
+                  onClick={() => setKaggleOpen((o) => !o)}
+                  title="Buscar bases públicas no Kaggle"
+                >
+                  🔍 Kaggle
+                </button>
+              </div>
               {busy ? (
                 <button className="btn dark-ghost" onClick={() => abort.current?.abort()}>
                   ■ Parar
                 </button>
               ) : (
-                <button className="btn primary" onClick={() => send()} disabled={!input.trim()}>
+                <button className="btn primary" onClick={() => send()} disabled={(!input.trim() && !attachment) || uploading}>
                   Enviar ↵
                 </button>
               )}
@@ -223,6 +363,98 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
         <HarnessView init={init} events={events} sessionId={sessionId} />
       )}
     </aside>
+  );
+}
+
+function KagglePanel({ onPick, close, disabled }: { onPick: (message: string) => void; close: () => void; disabled: boolean }) {
+  const [q, setQ] = useState("");
+  const [fileType, setFileType] = useState("csv");
+  const [results, setResults] = useState<KaggleDataset[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function search() {
+    if (!q.trim()) return;
+    setErr("");
+    setLoading(true);
+    try {
+      setResults(await api.kaggleSearch(q.trim(), fileType));
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="kaggle">
+      <div className="spread">
+        <div className="eyebrow" style={{ color: "var(--cyan)" }}>
+          Buscar no Kaggle
+        </div>
+        <button className="att-x" onClick={close} title="Fechar">
+          ×
+        </button>
+      </div>
+      <div className="row" style={{ gap: 6, marginTop: 6 }}>
+        <input
+          autoFocus
+          value={q}
+          placeholder="ex.: titanic, heart disease, weather…"
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && search()}
+        />
+        <select value={fileType} onChange={(e) => setFileType(e.target.value)} title="Tipo de arquivo">
+          <option value="csv">csv</option>
+          <option value="json">json</option>
+          <option value="parquet">parquet</option>
+          <option value="">todos</option>
+        </select>
+        <button className="btn primary sm" onClick={search} disabled={loading || !q.trim()}>
+          {loading ? <span className="spinner" /> : "Buscar"}
+        </button>
+      </div>
+      {err && <div className="kaggle-err">{err}</div>}
+      {results && (
+        <div className="kaggle-list">
+          {!results.length && <div className="small">Nenhuma base encontrada.</div>}
+          {results.map((r) => (
+            <div key={r.ref} className="kaggle-item">
+              <div className="ktitle">
+                <a href={r.url} target="_blank" rel="noreferrer">
+                  {r.title}
+                </a>
+              </div>
+              {r.subtitle && <div className="ksub">{r.subtitle}</div>}
+              <div className="kmeta">
+                <code>{r.ref}</code> · {r.size_mb < 1 ? `${Math.max(1, Math.round(r.size_mb * 1000))} KB` : `${r.size_mb} MB`} · ⬇ {r.downloads} · ▲{" "}
+                {r.votes} · usab. {r.usability}
+              </div>
+              <div className="row" style={{ gap: 6, marginTop: 6 }}>
+                <button
+                  className="btn primary sm"
+                  disabled={disabled}
+                  onClick={() =>
+                    onPick(
+                      `Importe a base do Kaggle "${r.title}" (ref ${r.ref}) no projeto atual: veja os arquivos, baixe o mais adequado, inspecione as colunas, escolha a coluna alvo e a tarefa explicando o porquê, e importe.`,
+                    )
+                  }
+                >
+                  Importar pelo chat
+                </button>
+                <button
+                  className="btn dark-ghost sm"
+                  disabled={disabled}
+                  onClick={() => onPick(`Descreva a base do Kaggle "${r.title}" (ref ${r.ref}): quais arquivos ela tem e para quais modelos das aulas ela serve?`)}
+                >
+                  Perguntar
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

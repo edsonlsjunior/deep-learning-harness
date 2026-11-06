@@ -98,3 +98,27 @@ export type ChatEvent =
   | { type: "result"; session_id: string; is_error: boolean; duration_ms: number; num_turns: number; total_cost_usd: number; usage: any; result: string }
   | { type: "error"; message: string }
   | { type: "done" };
+
+export interface FileInfo {
+  path: string;
+  filename: string;
+  format: string;
+  size_kb: number;
+  n_rows?: number;
+  n_columns?: number;
+  columns?: { name: string; kind: "numeric" | "categorical"; n_unique: number; n_missing: number; examples: string[] }[];
+  arrays?: Record<string, { shape: number[]; dtype: string }>;
+}
+
+export interface KaggleDataset {
+  ref: string;
+  title: string;
+  subtitle: string;
+  size_mb: number;
+  downloads: number;
+  votes: number;
+  usability: number;
+  license: string;
+  updated: string;
+  url: string;
+}

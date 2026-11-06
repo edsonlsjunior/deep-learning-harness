@@ -1,4 +1,4 @@
-"""Bases de dados: geradores embutidos (offline) + importação de CSV.
+"""Bases de dados: geradores embutidos (offline) + importação de arquivos (CSV, JSON, Excel, Parquet, NPZ).
 
 Cada base é materializada como um arquivo .npz (X, y) e um dicionário `meta`
 que descreve a tarefa. A tarefa determina quais arquiteturas fazem sentido:
@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from . import db
+from . import db, files
 
 TASKS = [
     "tabular_classification",
@@ -238,31 +238,26 @@ def catalog() -> list[dict[str, Any]]:
     return [{"source": k, "aula": v["aula"], "description": v["desc"]} for k, v in BUILTIN.items()]
 
 
-# ---------------------------------------------------------------- CSV
-def _from_csv(path: str, target_column: str | None, task: str | None):
-    p = Path(path)
-    if not p.exists():
-        raise ValueError(f"Arquivo não encontrado: {path}")
-    with p.open(newline="", encoding="utf-8-sig") as f:
-        sample = f.read(4096)
-        f.seek(0)
-        dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
-        rows = list(csv.reader(f, dialect))
-    header, rows = rows[0], [r for r in rows[1:] if any(c.strip() for c in r)]
+# ---------------------------------------------------------------- arquivos (CSV, JSON, Excel, Parquet, NPZ)
+def _from_table(path: str, target_column: str | None, task: str | None, sheet: str | None = None,
+                max_rows: int | None = None, seed: int = 42):
+    header, rows = files.read_table(path, sheet)
+    if max_rows and len(rows) > max_rows:  # amostra aleatória: treino em CPU, tempo de aula
+        idx = np.sort(np.random.default_rng(seed).choice(len(rows), max_rows, replace=False))
+        rows = [rows[i] for i in idx]
     cols = {h: [r[i] if i < len(r) else "" for r in rows] for i, h in enumerate(header)}
+    numeric = files._is_numeric
 
-    def numeric(vals: list[str]) -> bool:
-        try:
-            [float(v.replace(",", ".")) for v in vals if v != ""]
-            return True
-        except ValueError:
-            return False
-
-    target = cols.pop(target_column) if target_column else None
-    if target_column and target is None:
+    if target_column and target_column not in cols:
         raise ValueError(f"Coluna alvo '{target_column}' não existe. Colunas: {header}")
+    target = cols.pop(target_column) if target_column else None
+    if target is not None:  # descarta linhas sem alvo
+        keep = [i for i, v in enumerate(target) if v != ""]
+        if len(keep) < len(target):
+            target = [target[i] for i in keep]
+            cols = {k: [v[i] for i in keep] for k, v in cols.items()}
 
-    feats, names = [], []
+    feats, names, dropped = [], [], []
     for name, vals in cols.items():
         if numeric(vals):
             arr = np.array([float(v.replace(",", ".")) if v != "" else np.nan for v in vals], dtype=np.float32)
@@ -271,13 +266,20 @@ def _from_csv(path: str, target_column: str | None, task: str | None):
             names.append(name)
         else:  # one-hot encoding de categóricas
             cats = sorted(set(vals))
-            if len(cats) > 50:
+            if len(cats) > 50:  # texto livre / identificadores: não vira atributo
+                dropped.append(name)
                 continue
             for c in cats:
                 feats.append(np.array([v == c for v in vals], dtype=np.float32)[:, None])
                 names.append(f"{name}={c}")
+    if not feats:
+        raise ValueError("Nenhuma coluna utilizável como atributo (todas categóricas com > 50 valores?).")
     X = np.concatenate(feats, axis=1)
-    meta: dict[str, Any] = {"feature_names": names, "csv_path": str(p)}
+    meta: dict[str, Any] = {"feature_names": names, "file_path": str(path), "file_format": Path(path).suffix.lstrip(".")}
+    if dropped:
+        meta["dropped_columns"] = dropped
+    if max_rows and len(rows) == max_rows:
+        meta["sampled_rows"] = max_rows
     if target is None:
         meta["task"] = "unsupervised"
         return X, np.zeros(0, dtype=np.float32), meta
@@ -289,9 +291,54 @@ def _from_csv(path: str, target_column: str | None, task: str | None):
         meta["class_names"] = classes
         y = np.array([classes.index(v) for v in target], dtype=np.int64)
     else:
+        if not numeric(target):
+            raise ValueError(f"Regressão exige alvo numérico; '{target_column}' é categórica.")
         y = np.array([float(v.replace(",", ".")) for v in target], dtype=np.float32)
     meta["target_column"] = target_column
     return X, y, meta
+
+
+def _from_npz(path: str, task: str | None):
+    with np.load(path, allow_pickle=False) as z:
+        if "X" not in z.files:
+            raise ValueError(f"O .npz precisa de um array 'X' (e opcionalmente 'y'). Arrays: {z.files}")
+        X = z["X"].astype(np.float32)
+        y = z["y"] if "y" in z.files else np.zeros(0, dtype=np.float32)
+    if X.ndim not in (2, 3, 4):
+        raise ValueError(f"X com formato {list(X.shape)} não suportado: use (N,F), (N,T,F) ou (N,C,H,W).")
+    is_cls = y.size > 0 and np.issubdtype(y.dtype, np.integer)
+    if task is None:
+        if not y.size:
+            task = "unsupervised"
+        elif X.ndim == 4:
+            task = "image_classification"
+        elif X.ndim == 3:
+            task = "sequence_classification" if is_cls else "sequence_regression"
+        else:
+            task = "tabular_classification" if is_cls else "tabular_regression"
+    if task not in TASKS:
+        raise ValueError(f"Tarefa '{task}' inválida. Use: {TASKS}")
+    if y.size:
+        if len(y) != len(X):
+            raise ValueError(f"X tem {len(X)} amostras mas y tem {len(y)}.")
+        y = y.astype(np.int64) if task.endswith("classification") else y.astype(np.float32)
+        if task.endswith("classification") and y.min() < 0:
+            raise ValueError("Rótulos de classe devem ser inteiros >= 0.")
+    meta: dict[str, Any] = {"task": task, "file_path": str(path), "file_format": "npz"}
+    if task.endswith("classification"):
+        meta["class_names"] = [str(i) for i in range(int(y.max()) + 1)]
+    return X, y, meta
+
+
+def from_file(params: dict):
+    path = params.get("path")
+    if not path:
+        raise ValueError("Informe params.path com o caminho do arquivo.")
+    ext = files.check_ext(path)
+    if ext == ".npz":
+        return _from_npz(path, params.get("task"))
+    return _from_table(path, params.get("target_column"), params.get("task"), params.get("sheet"),
+                       int(params["max_rows"]) if params.get("max_rows") else None, int(params.get("seed", 42)))
 
 
 # ---------------------------------------------------------------- API interna
@@ -310,14 +357,15 @@ def _describe(X: np.ndarray, y: np.ndarray, meta: dict) -> dict:
 
 def create(project_id: int, source: str, name: str | None = None, params: dict | None = None) -> dict:
     params = params or {}
-    if source == "csv":
-        X, y, meta = _from_csv(params["path"], params.get("target_column"), params.get("task"))
-        meta["description"] = f"CSV importado de {params['path']}"
+    if source in ("file", "csv"):  # "csv" mantido por compatibilidade
+        X, y, meta = from_file(params)
+        origin = params.get("origin") or Path(params["path"]).name
+        meta["description"] = f"Arquivo importado: {origin}"
     elif source in BUILTIN:
         X, y, meta = BUILTIN[source]["gen"](params)
         meta["description"] = BUILTIN[source]["desc"]
     else:
-        raise ValueError(f"Fonte desconhecida '{source}'. Disponíveis: {list(BUILTIN)} ou 'csv'.")
+        raise ValueError(f"Fonte desconhecida '{source}'. Disponíveis: {list(BUILTIN)} ou 'file'.")
     meta = _describe(X, y, meta)
     ds_id = db.insert("datasets", {"project_id": project_id, "name": name or source, "source": source,
                                     "params": params, "meta": meta, "created_at": db.now()})

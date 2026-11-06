@@ -1,4 +1,7 @@
-import type { Architecture, CatalogEntry, ChatEvent, Dataset, Model, Project, ProjectSummary, Run } from "./types";
+import type { Architecture, CatalogEntry, ChatEvent, Dataset, FileInfo, KaggleDataset, Model, Project, ProjectSummary, Run } from "./types";
+
+/** Formatos de base aceitos no upload (espelha backend/app/files.py). */
+export const DATA_ACCEPT = ".csv,.tsv,.txt,.json,.jsonl,.xlsx,.xls,.parquet,.npz";
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const r = await fetch(path, {
@@ -27,7 +30,14 @@ export const api = {
   deleteProject: (id: number) => req("DELETE", `/api/projects/${id}`),
   addDataset: (pid: number, source: string, name: string | null, params: object) =>
     req<Dataset>("POST", `/api/projects/${pid}/datasets`, { source, name, params }),
-  uploadCsv: (pid: number, form: FormData) => req<Dataset>("POST", `/api/projects/${pid}/datasets/upload`, form),
+  uploadFile: (pid: number, form: FormData) => req<Dataset>("POST", `/api/projects/${pid}/datasets/upload`, form),
+  stageUpload: (file: File) => {
+    const f = new FormData();
+    f.append("file", file);
+    return req<FileInfo>("POST", "/api/uploads", f);
+  },
+  kaggleSearch: (q: string, fileType = "") =>
+    req<KaggleDataset[]>("GET", `/api/kaggle/search?q=${encodeURIComponent(q)}${fileType ? `&file_type=${fileType}` : ""}`),
   previewDataset: (id: number, n = 8) => req<any>("GET", `/api/datasets/${id}/preview?n=${n}`),
   deleteDataset: (id: number) => req("DELETE", `/api/datasets/${id}`),
   createModel: (pid: number, name: string, architecture: string, config: object) =>

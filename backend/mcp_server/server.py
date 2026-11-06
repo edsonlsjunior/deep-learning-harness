@@ -26,7 +26,8 @@ mcp = MCPServer(
     name="dl-lab",
     instructions=(
         "Ferramentas para operar o Laboratório de Deep Learning: projetos, bases de dados, modelos "
-        "(perceptron, adaline, mlp, cnn, rnn, lstm, gru, transformer, autoencoder, gan), treinos e predições."
+        "(perceptron, adaline, mlp, cnn, rnn, lstm, gru, transformer, autoencoder, gan), treinos e predições. "
+        "Bases podem vir de arquivos enviados pelo usuário (inspect_file/import_file) ou do Kaggle (search_kaggle)."
     ),
 )
 
@@ -81,7 +82,8 @@ async def list_architectures() -> str:
 @mcp.tool(annotations=READ, structured_output=False)
 async def list_dataset_sources() -> str:
     """Lista as bases de dados embutidas que podem ser adicionadas a um projeto (com descrição e
-    parâmetros aceitos). Também é possível importar CSV com `import_csv`."""
+    parâmetros aceitos). Também é possível importar arquivos próprios com `import_file`
+    ou buscar bases no Kaggle com `search_kaggle`."""
     return dump(await call("GET", "/api/datasets/catalog"))
 
 
@@ -134,16 +136,52 @@ async def add_dataset(project_id: int, source: str, name: str | None = None,
     return dump({"id": d["id"], "name": d["name"], "meta": d["meta"]})
 
 
+@mcp.tool(annotations=READ, structured_output=False)
+async def inspect_file(path: str, sheet: str | None = None) -> str:
+    """Inspeciona um arquivo de dados ANTES de importar: nº de linhas, colunas (numérica/categórica,
+    valores únicos, faltantes, exemplos) e prévia. Use para escolher a coluna alvo e a tarefa.
+    Funciona com arquivos enviados pelo usuário no chat e com os baixados do Kaggle."""
+    return dump(await call("GET", "/api/files/inspect", params={"path": path, **({"sheet": sheet} if sheet else {})}))
+
+
 @mcp.tool(structured_output=False)
-async def import_csv(project_id: int, path: str, target_column: str | None = None,
-                     task: str | None = None, name: str | None = None) -> str:
-    """Importa um arquivo CSV local como base de dados. Colunas numéricas viram atributos e categóricas
-    recebem one-hot encoding. `task`: tabular_classification | tabular_regression (inferida se omitida).
-    Sem `target_column` a base é não supervisionada (útil para autoencoder/GAN)."""
-    body = {"source": "csv", "name": name,
-            "params": {"path": path, "target_column": target_column, "task": task}}
+async def import_file(project_id: int, path: str, target_column: str | None = None,
+                      task: str | None = None, name: str | None = None, sheet: str | None = None,
+                      max_rows: int | None = None) -> str:
+    """Importa um arquivo local como base de dados do projeto. Formatos: .csv .tsv .txt .json .jsonl
+    .xlsx .xls .parquet (tabelas) e .npz (arrays X e y prontos, inclusive imagens (N,C,H,W) e séries (N,T,F)).
+    Tabelas: colunas numéricas viram atributos, categóricas (até 50 valores) recebem one-hot e colunas de
+    texto livre/ID são descartadas. `task`: tabular_classification | tabular_regression (inferida se omitida).
+    Sem `target_column` a base é não supervisionada (autoencoder/GAN). `max_rows` faz amostragem aleatória
+    (recomendado <= 20000 para treinar rápido em CPU). `sheet`: aba de planilha Excel."""
+    params = {"path": path, "target_column": target_column, "task": task, "sheet": sheet, "max_rows": max_rows}
+    body = {"source": "file", "name": name, "params": {k: v for k, v in params.items() if v is not None}}
     d = await call("POST", f"/api/projects/{project_id}/datasets", json=body)
     return dump({"id": d["id"], "name": d["name"], "meta": d["meta"]})
+
+
+# ------------------------------------------------------------------ Kaggle
+@mcp.tool(annotations=READ, structured_output=False)
+async def search_kaggle(query: str, page: int = 1, file_type: str | None = None,
+                        sort_by: str = "hottest") -> str:
+    """Busca bases públicas no Kaggle. Retorna ref (dono/base), título, tamanho, downloads, votos e
+    usabilidade. `file_type`: csv | json | parquet. `sort_by`: hottest | votes | updated | active.
+    Prefira bases pequenas (poucos MB) e com boa usabilidade para treinar em aula."""
+    params = {"q": query, "page": page, "sort_by": sort_by, **({"file_type": file_type} if file_type else {})}
+    return dump(await call("GET", "/api/kaggle/search", params=params))
+
+
+@mcp.tool(annotations=READ, structured_output=False)
+async def kaggle_dataset_files(ref: str) -> str:
+    """Lista os arquivos de uma base do Kaggle (`ref` = 'dono/base') com tamanho e se são importáveis."""
+    return dump(await call("GET", "/api/kaggle/files", params={"ref": ref}))
+
+
+@mcp.tool(structured_output=False)
+async def download_kaggle_dataset(ref: str, file_name: str | None = None) -> str:
+    """Baixa uma base do Kaggle (inteira ou só `file_name`) para o servidor do laboratório e devolve os
+    caminhos locais. Depois use `inspect_file` e `import_file` com o caminho do arquivo desejado."""
+    return dump(await call("POST", "/api/kaggle/download", json={"ref": ref, "file_name": file_name}))
 
 
 @mcp.tool(annotations=READ, structured_output=False)

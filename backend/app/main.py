@@ -7,16 +7,18 @@ Ambos enxergam exatamente o mesmo estado — esse é o ponto do harness.
 """
 from __future__ import annotations
 
-import shutil
+import uuid
+from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import architectures as A
-from . import chat, db, training
+from . import chat, db, files, kaggle, training
 from . import datasets as D
 
 app = FastAPI(title="DL Lab API", version="1.0")
@@ -26,6 +28,11 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.exception_handler(ValueError)
 async def value_error(_: Request, exc: ValueError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(httpx.HTTPError)
+async def upstream_error(_: Request, exc: httpx.HTTPError):
+    return JSONResponse(status_code=502, content={"detail": f"Falha de rede ao acessar serviço externo: {exc}"})
 
 
 def _404(obj: Any, what: str):
@@ -41,7 +48,7 @@ class ProjectIn(BaseModel):
 
 
 class DatasetIn(BaseModel):
-    source: str = Field(description="nome de uma base embutida ou 'csv'")
+    source: str = Field(description="nome de uma base embutida ou 'file' (params.path)")
     name: str | None = None
     params: dict[str, Any] = {}
 
@@ -60,6 +67,11 @@ class RunIn(BaseModel):
 
 class PredictIn(BaseModel):
     inputs: list[Any]
+
+
+class KaggleDownloadIn(BaseModel):
+    ref: str
+    file_name: str | None = None
 
 
 class ChatIn(BaseModel):
@@ -134,17 +146,77 @@ def add_dataset(pid: int, body: DatasetIn):
     return D.create(pid, body.source, body.name, body.params)
 
 
+async def _save_upload(file: UploadFile, prefix: str) -> Path:
+    """Grava o upload em data/uploads/ respeitando formato e tamanho máximos."""
+    name = Path(file.filename or "dados.csv").name
+    files.check_ext(name)
+    up = db.DATA_DIR / "uploads"
+    up.mkdir(exist_ok=True)
+    dest = up / f"{prefix}_{uuid.uuid4().hex[:8]}_{name}"
+    limit, total = files.MAX_UPLOAD_MB * 1024 * 1024, 0
+    with dest.open("wb") as f:
+        while chunk := await file.read(1 << 20):
+            total += len(chunk)
+            if total > limit:
+                f.close()
+                dest.unlink(missing_ok=True)
+                raise ValueError(f"Arquivo maior que {files.MAX_UPLOAD_MB} MB")
+            f.write(chunk)
+    return dest
+
+
 @app.post("/api/projects/{pid}/datasets/upload")
 async def upload_dataset(pid: int, file: UploadFile = File(...), target_column: str = Form(""),
                          task: str = Form(""), name: str = Form("")):
     _404(db.one("SELECT id FROM projects WHERE id = ?", (pid,)), "Projeto")
-    up = db.DATA_DIR / "uploads"
-    up.mkdir(exist_ok=True)
-    dest = up / f"p{pid}_{(file.filename or 'dados.csv').replace('/', '_')}"
-    with dest.open("wb") as f:
-        shutil.copyfileobj(file.file, f)
-    params = {"path": str(dest), "target_column": target_column or None, "task": task or None}
-    return D.create(pid, "csv", name or file.filename, params)
+    dest = await _save_upload(file, f"p{pid}")
+    params = {"path": str(dest), "target_column": target_column or None, "task": task or None,
+              "origin": file.filename}
+    return D.create(pid, "file", name or file.filename, params)
+
+
+@app.post("/api/uploads")
+async def stage_upload(file: UploadFile = File(...)):
+    """Upload pelo chat: o arquivo fica guardado e o Claude decide como importá-lo (alvo, tarefa)."""
+    dest = await _save_upload(file, "chat")
+    try:
+        info = files.inspect(dest)
+    except ValueError as e:
+        dest.unlink(missing_ok=True)
+        raise ValueError(f"Não consegui ler o arquivo: {e}") from e
+    info["filename"] = file.filename
+    return info
+
+
+@app.get("/api/files/formats")
+def file_formats():
+    return {"extensions": files.SUPPORTED, "max_upload_mb": files.MAX_UPLOAD_MB}
+
+
+@app.get("/api/files/inspect")
+def inspect_file(path: str, sheet: str | None = None):
+    return files.inspect(path, sheet)
+
+
+# ------------------------------------------------------------------ Kaggle
+@app.get("/api/kaggle/status")
+def kaggle_status():
+    return kaggle.status()
+
+
+@app.get("/api/kaggle/search")
+def kaggle_search(q: str, page: int = 1, file_type: str | None = None, sort_by: str = "hottest"):
+    return kaggle.search(q, page, file_type, sort_by)
+
+
+@app.get("/api/kaggle/files")
+def kaggle_files(ref: str):
+    return kaggle.list_files(ref)
+
+
+@app.post("/api/kaggle/download")
+def kaggle_download(body: KaggleDownloadIn):
+    return kaggle.download(body.ref, body.file_name)
 
 
 @app.get("/api/datasets/{did}")

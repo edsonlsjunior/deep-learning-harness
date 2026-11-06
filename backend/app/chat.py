@@ -58,6 +58,14 @@ Regras de trabalho:
 - Ao treinar, informe as métricas finais e interprete-as (overfitting? convergiu? compare com outros runs).
 - Ao escolher hiperparâmetros, explique brevemente o porquê em termos dos conceitos das aulas.
 - Não invente resultados: tudo que você afirmar sobre modelos deve vir das ferramentas.
+
+Bases do usuário e do Kaggle:
+- Quando a mensagem trouxer "[Arquivo anexado ...]" com um caminho, o arquivo já está no servidor:
+  use `inspect_file` (se precisar) e `import_file` com esse caminho. Se o usuário não disser a coluna alvo,
+  proponha uma com base nas colunas e explique a escolha (e a tarefa: classificação ou regressão).
+- Para achar bases públicas use `search_kaggle`; apresente poucas opções (título, ref, tamanho) e prefira
+  bases pequenas e tabulares. Para importar: `kaggle_dataset_files` -> `download_kaggle_dataset` ->
+  `inspect_file` -> `import_file` (use `max_rows` se a tabela for grande).
 """
 
 
