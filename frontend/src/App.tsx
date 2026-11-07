@@ -95,6 +95,9 @@ export default function App() {
           <span className="hbadge">
             <b>{archs.length}</b> arquiteturas · <b>{catalog.length}</b> bases
           </span>
+          <a className="btn dark-ghost" href="/apresentacao" target="_blank" rel="noreferrer" style={{ textDecoration: "none" }} title="Slides: o que é um harness">
+            Apresentação
+          </a>
           <button className="btn dark-ghost" onClick={() => setChatOpen((v) => !v)}>
             {chatOpen ? "Ocultar chat" : "Abrir chat"}
           </button>
