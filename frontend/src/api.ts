@@ -22,6 +22,9 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 }
 
 export const api = {
+  approveAction: (runId: string, id: string, approved: boolean) => req("POST", `/api/harness/runs/${runId}/approvals/${id}`, {approved}),
+  detectProviders: () => req<{id: string; name: string; configured: boolean; default_model: string; available: boolean; status: string; models: string[]}[]>("POST", "/api/providers/detect"),
+  providers: () => req<{id: string; name: string; configured: boolean; default_model: string}[]>("GET", "/api/providers"),
   architectures: () => req<Architecture[]>("GET", "/api/architectures"),
   catalog: () => req<CatalogEntry[]>("GET", "/api/datasets/catalog"),
   projects: () => req<ProjectSummary[]>("GET", "/api/projects"),
@@ -48,13 +51,14 @@ export const api = {
   run: (id: number) => req<Run>("GET", `/api/runs/${id}`),
   cancelRun: (id: number) => req("POST", `/api/runs/${id}/cancel`),
   deleteRun: (id: number) => req("DELETE", `/api/runs/${id}`),
+  predict: (id: number, inputs: unknown[]) => req<{predictions: number[]; labels?: string[] | null; probabilities?: number[][]}>("POST", `/api/runs/${id}/predict`, {inputs}),
   generate: (id: number, n = 16) => req<any>("POST", `/api/runs/${id}/generate?n=${n}`),
   harness: () => req<any>("GET", "/api/harness"),
 };
 
 /** POST /api/chat devolve Server-Sent Events; lemos o corpo como stream. */
 export async function streamChat(
-  body: { message: string; session_id?: string | null; project_id?: number | null; model?: string | null },
+  body: { message: string; session_id?: string | null; project_id?: number | null; model?: string | null; provider?: string; history?: {role: string; content: string}[]; policy?: string },
   onEvent: (e: ChatEvent) => void,
   signal: AbortSignal,
 ) {

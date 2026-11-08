@@ -89,6 +89,8 @@ export interface CatalogEntry {
 
 /** Eventos normalizados que o backend repassa do stream-json do Claude Code. */
 export type ChatEvent =
+  | { type: "harness_policy"; run_id: string; policy: string; instructions: string; limits: {steps: number; seconds: number; approval_seconds: number} }
+  | PermissionEvent
   | { type: "harness"; command: string[] }
   | { type: "init"; session_id: string; model: string; tools: string[]; mcp_servers: { name: string; status: string }[] }
   | { type: "text_delta"; text: string }
@@ -98,6 +100,21 @@ export type ChatEvent =
   | { type: "result"; session_id: string; is_error: boolean; duration_ms: number; num_turns: number; total_cost_usd: number; usage: any; result: string }
   | { type: "error"; message: string }
   | { type: "done" };
+
+export interface PermissionEvent {
+  type: "permission";
+  id: string;
+  run_id: string;
+  tool: string;
+  kind: string;
+  method: string;
+  path: string;
+  input: unknown;
+  step: number;
+  decision: string;
+  reason: string;
+  elapsed?: number;
+}
 
 export interface FileInfo {
   path: string;

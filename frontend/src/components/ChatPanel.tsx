@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { DATA_ACCEPT, api, streamChat } from "../api";
 import type { ChatEvent, FileInfo, KaggleDataset, Project } from "../types";
+import PolicyPanel, { Approvals, MODES, DESCRIPTIONS } from "./PolicyPanel";
 
 type Part = { kind: "text"; text: string } | { kind: "tool"; id: string; name: string; input: unknown; result?: string; isError?: boolean };
 interface Msg {
@@ -34,6 +35,7 @@ function attachmentLabel(f: FileInfo) {
 }
 
 const SUGGESTIONS = [
+  "Crie um modelo CNN para detectar os algarismos no MNIST (o equivalente embutido ao Keras MNIST), treine-o e mostre a acurácia.",
   "Crie um projeto 'Aula 1', adicione as bases and_gate e xor_gate e mostre que o perceptron resolve AND mas não XOR.",
   "Neste projeto, adicione a base xor_gate e treine um MLP com uma camada oculta de 4 neurônios tanh. Explique por que funciona.",
   "Adicione a base digits e compare um MLP com uma CNN pequena. Qual tem menos parâmetros e mais acurácia?",
@@ -45,17 +47,37 @@ const SUGGESTIONS = [
 
 export default function ChatPanel({ project, onToolResult }: { project: Project | null; onToolResult: () => void }) {
   const [view, setView] = useState<"chat" | "harness">("chat");
-  const [msgs, setMsgs] = useState<Msg[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem("dl.msgs") ?? "[]");
-    } catch {
-      return [];
-    }
+  const [policy, setPolicy] = useState(() => {
+    // Operar é o caminho didático principal; a política pode ser alterada na aba Harness.
+    return "operate";
   });
+  useEffect(() => { localStorage.setItem("dl.policy", policy); }, [policy]);
+  // A conversa é deliberadamente efêmera: atualizar a página começa um chat limpo.
+  const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(() => localStorage.getItem("dl.session"));
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [model, setModel] = useState(() => localStorage.getItem("dl.model") ?? "");
+  const [provider, setProvider] = useState(() => localStorage.getItem("dl.provider") ?? "");
+  const [providers, setProviders] = useState<{id: string; name: string; configured: boolean; default_model: string}[]>([]);
+  const [detecting, setDetecting] = useState(false);
+  const [detected, setDetected] = useState<Awaited<ReturnType<typeof api.detectProviders>>>([]);
+  const [detectError, setDetectError] = useState("");
+  async function detectProviders() {
+    setDetecting(true); setDetectError("");
+    try {
+      const found = await api.detectProviders();
+      setDetected(found); setProviders(found);
+    } catch { setDetectError("Não foi possível detectar. Confira se a API está online."); }
+    finally { setDetecting(false); }
+  }
+  useEffect(() => {
+    // Remove conversas gravadas por versões anteriores. Projetos e treinos ficam no backend.
+    localStorage.removeItem("dl.msgs");
+    localStorage.removeItem("dl.session");
+    api.providers().then(setProviders).catch(() => {});
+  }, []);
+  useEffect(() => { localStorage.setItem("dl.provider", provider); }, [provider]);
   const [events, setEvents] = useState<ChatEvent[]>([]);
   const [init, setInit] = useState<Extract<ChatEvent, { type: "init" }> | null>(null);
   const [attachment, setAttachment] = useState<FileInfo | null>(null);
@@ -66,6 +88,8 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
   const fileInput = useRef<HTMLInputElement>(null);
   const abort = useRef<AbortController | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const activeProvider = providers.find(p => p.id === provider);
+  const providerReady = !!activeProvider?.configured && (provider !== "local" || !!model.trim());
   // o stream vive por vários renders: guardamos sempre o callback mais recente
   const onToolResultRef = useRef(onToolResult);
   onToolResultRef.current = onToolResult;
@@ -74,17 +98,6 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
   }, [msgs]);
   useEffect(() => {
-    localStorage.setItem("dl.session", sessionId ?? "");
-  }, [sessionId]);
-  useEffect(() => {
-    if (busy) return; // grava só ao fim de cada resposta
-    try {
-      localStorage.setItem("dl.msgs", JSON.stringify(msgs.slice(-60)));
-    } catch {
-      /* quota cheia: ignora */
-    }
-  }, [msgs, busy]);
-  useEffect(() => {
     localStorage.setItem("dl.model", model);
   }, [model]);
 
@@ -92,6 +105,7 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
   function apply(ev: ChatEvent) {
     if (ev.type !== "text_delta") setEvents((e) => [...e.slice(-300), ev]);
     setMsgs((prev) => {
+      if (!prev.length) return prev;
       const out = [...prev];
       const last = { ...out[out.length - 1], parts: [...out[out.length - 1].parts] };
       out[out.length - 1] = last;
@@ -140,7 +154,7 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
     const att = text === undefined ? attachment : null; // sugestões/Kaggle não levam o anexo
     let typed = (text ?? input).trim();
     if (!typed && att) typed = "Importe este arquivo como base de dados no projeto atual e descreva-o.";
-    if (!typed || busy || uploading) return;
+    if (!typed || busy || uploading || !providerReady) return;
     const message = att ? `${typed}\n\n${describeAttachment(att)}` : typed;
     setInput("");
     if (att) setAttachment(null);
@@ -151,11 +165,13 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
     setMsgs((m) => [...m, userMsg, { role: "assistant", parts: [] }]);
     abort.current = new AbortController();
     try {
-      await streamChat({ message, session_id: sessionId, project_id: project?.id ?? null, model: model || null }, apply, abort.current.signal);
+      const history = msgs.slice(-30).map(m => ({role: m.role, content: m.parts.filter(p => p.kind === "text").map(p => p.kind === "text" ? p.text : "").join("\n")}));
+      await streamChat({ message, session_id: provider === "claude-code" ? sessionId : null, project_id: project?.id ?? null, model: model || null, provider, history, policy }, apply, abort.current.signal);
     } catch (e: any) {
       if (e.name !== "AbortError") apply({ type: "error", message: e.message });
     } finally {
       setBusy(false);
+      setEvents(es => es.map(e => e.type === "permission" && e.decision === "awaiting" ? {...e, decision: "cancelled", reason: "Conversa encerrada sem executar a ação pendente."} : e));
       onToolResultRef.current();
     }
   }
@@ -189,13 +205,22 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
       <div className="chat-head">
         <div className="spread">
           <div>
-            <div className="eyebrow">Claude Code · MCP stdio</div>
-            <h3>Assistente do laboratório</h3>
+            <div className="eyebrow">ASSISTENTE COM FERRAMENTAS MCP</div>
+            <h3>Agente</h3>
           </div>
-          <button className="btn dark-ghost" onClick={reset} title="Começa uma nova sessão do Claude Code">
+          <button className="btn dark-ghost" onClick={reset} title="Começa uma nova conversa">
             Nova conversa
           </button>
         </div>
+        <label className="provider-main">Provedor
+          <select id="llm-provider" aria-label="Provedor de IA" value={provider} disabled={busy} onChange={e => {
+            const next = e.target.value;
+            reset(); setProvider(next); setModel(providers.find(p => p.id === next)?.default_model ?? "");
+          }}>
+            <option value="">Escolha o provedor…</option>
+            {providers.map(p => <option key={p.id} value={p.id}>{p.name}{p.configured ? "" : " (configurar)"}</option>)}
+          </select>
+        </label>
         <div className="chat-tabs">
           <button className={view === "chat" ? "active" : ""} onClick={() => setView("chat")}>
             Chat
@@ -212,7 +237,7 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
             {!msgs.length && (
               <div>
                 <p className="small" style={{ color: "#91a5bb", lineHeight: 1.6 }}>
-                  Peça em linguagem natural. O Claude decide quais ferramentas MCP chamar
+                  Peça em linguagem natural. O modelo escolhido decide quais ferramentas MCP chamar
                   {project ? (
                     <>
                       {" "}— ele sabe que o projeto atual é <b style={{ color: "#fff" }}>{project.name}</b>
@@ -221,7 +246,7 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
                   .
                 </p>
                 <div className="suggest">
-                  {SUGGESTIONS.map((s) => (
+                  {SUGGESTIONS.slice(0, 3).map((s) => (
                     <button key={s} onClick={() => send(s)}>
                       {s}
                     </button>
@@ -261,7 +286,6 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
             ))}
           </div>
           <div className="chat-input">
-            {kaggleOpen && <KagglePanel onPick={(msg) => send(msg)} close={() => setKaggleOpen(false)} disabled={busy} />}
             {(attachment || uploading || uploadErr) && (
               <div className={`att-chip ${uploadErr ? "err" : ""}`}>
                 {uploading ? (
@@ -324,43 +348,46 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
               }}
             />
             <div className="spread" style={{ marginTop: 8 }}>
-              <div className="row" style={{ gap: 6 }}>
-                <select value={model} onChange={(e) => setModel(e.target.value)} title="Modelo usado pelo Claude Code">
-                  <option value="">modelo padrão</option>
-                  <option value="opus">opus</option>
-                  <option value="sonnet">sonnet</option>
-                  <option value="haiku">haiku</option>
-                </select>
-                <button
-                  className="btn dark-ghost sm"
-                  onClick={() => fileInput.current?.click()}
-                  disabled={busy || uploading}
-                  title="Anexar base de dados: CSV, TSV, TXT, JSON, JSONL, Excel, Parquet ou NPZ (também dá para arrastar e soltar)"
-                >
-                  📎 Anexar
-                </button>
-                <button
-                  className={`btn dark-ghost sm ${kaggleOpen ? "on" : ""}`}
-                  onClick={() => setKaggleOpen((o) => !o)}
-                  title="Buscar bases públicas no Kaggle"
-                >
-                  🔍 Kaggle
-                </button>
-              </div>
+              <details className="chat-options">
+                <summary>Mais opções</summary>
+                <div className="row option-actions">
+                  {provider !== "claude-code" ? <input aria-label="Modelo de IA" placeholder={provider === "codex" ? "Modelo padrão do Codex" : "Nome do modelo"} value={model} disabled={busy} onChange={e => { setModel(e.target.value); setSessionId(null); }} /> : <select value={model} disabled={busy} onChange={(e) => { setModel(e.target.value); setSessionId(null); }} title="Modelo usado pelo Claude Code">
+                    <option value="">modelo padrão</option><option value="opus">opus</option><option value="sonnet">sonnet</option><option value="haiku">haiku</option>
+                  </select>}
+                  <button className="btn dark-ghost sm" disabled={busy || detecting} onClick={detectProviders}>{detecting ? "Detectando…" : "Verificar conexão"}</button>
+                  <button className="btn dark-ghost sm" onClick={() => fileInput.current?.click()} disabled={busy || uploading}>📎 Arquivo</button>
+                  <button className={`btn dark-ghost sm ${kaggleOpen ? "on" : ""}`} onClick={() => setKaggleOpen((o) => !o)}>🔍 Kaggle</button>
+                </div>
+                {detectError && <p className="small" role="status">{detectError}</p>}
+                {!!detected.length && <p className="small">{detected.find(p => p.id === provider)?.status ?? "Conexão verificada."}</p>}
+              </details>
               {busy ? (
                 <button className="btn dark-ghost" onClick={() => abort.current?.abort()}>
                   ■ Parar
                 </button>
               ) : (
-                <button className="btn primary" onClick={() => send()} disabled={(!input.trim() && !attachment) || uploading}>
+                <button className="btn primary" onClick={() => send()} disabled={(!input.trim() && !attachment) || uploading || !providerReady}>
                   Enviar ↵
                 </button>
               )}
             </div>
+            {kaggleOpen && <KagglePanel onPick={(msg) => send(msg)} close={() => setKaggleOpen(false)} disabled={busy} />}
+            {!providerReady && <p className="small provider-warning" role="status">{!provider ? "Escolha um provedor no topo." : `${activeProvider?.name ?? "O provedor"} precisa ser configurado ou verificado.`}</p>}
           </div>
         </>
       ) : (
-        <HarnessView init={init} events={events} sessionId={sessionId} />
+        <>
+          <div className="harness-controls">
+            <label className="policy-control">Permissão do agente
+              <select aria-label="Permissão do agente" value={policy} disabled={busy} onChange={e => {setPolicy(e.target.value); setSessionId(null);}}>
+                {Object.entries(MODES).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+            </label>
+            <p className="small">{DESCRIPTIONS[policy]}</p>
+          </div>
+          <Approvals events={events} busy={busy} />
+          <PolicyPanel events={events} policy={policy} />
+        </>
       )}
     </aside>
   );

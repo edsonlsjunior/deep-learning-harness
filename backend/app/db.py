@@ -9,13 +9,14 @@ Tabelas:
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = Path(os.environ.get("DL_LAB_DATA_DIR", str(Path(__file__).resolve().parent.parent / "data")))
 DATASETS_DIR = DATA_DIR / "datasets"
 ARTIFACTS_DIR = DATA_DIR / "artifacts"
 for d in (DATA_DIR, DATASETS_DIR, ARTIFACTS_DIR):

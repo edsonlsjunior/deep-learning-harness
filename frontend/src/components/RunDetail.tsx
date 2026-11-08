@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { Project, Run } from "../types";
 import { ARCH_LABEL, archTheme } from "../theme";
@@ -206,6 +206,10 @@ export default function RunDetail({ runId, project, liveRun, onDeleted }: { runI
         </div>
       )}
 
+      {r.status === "completed" && ds?.meta.task === "image_classification" && arch !== "autoencoder" && arch !== "gan" && (
+        <DigitPredictor runId={r.id} classNames={names} />
+      )}
+
       <details className="section">
         <summary className="eyebrow" style={{ cursor: "pointer" }}>
           Hiperparâmetros e configuração
@@ -216,4 +220,68 @@ export default function RunDetail({ runId, project, liveRun, onDeleted }: { runI
       </details>
     </div>
   );
+}
+
+function DigitPredictor({ runId, classNames }: { runId: number; classNames?: string[] }) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const [result, setResult] = useState<{predictions: number[]; labels?: string[] | null; probabilities?: number[][]} | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const clear = () => {
+    const c = canvas.current;
+    if (!c) return;
+    const ctx = c.getContext("2d")!;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, c.width, c.height);
+    setResult(null);
+    setError("");
+  };
+  useEffect(clear, [runId]);
+
+  const point = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const c = canvas.current!;
+    const box = c.getBoundingClientRect();
+    return {x: (e.clientX - box.left) * c.width / box.width, y: (e.clientY - box.top) * c.height / box.height};
+  };
+  const start = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    drawing.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const p = point(e), ctx = e.currentTarget.getContext("2d")!;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y);
+  };
+  const move = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drawing.current) return;
+    const p = point(e), ctx = e.currentTarget.getContext("2d")!;
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 22; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.lineTo(p.x, p.y); ctx.stroke();
+  };
+  const predict = async () => {
+    const c = canvas.current!;
+    const small = document.createElement("canvas"); small.width = 28; small.height = 28;
+    const sctx = small.getContext("2d")!;
+    sctx.drawImage(c, 0, 0, 28, 28);
+    const rgba = sctx.getImageData(0, 0, 28, 28).data;
+    const image = Array.from({length: 28}, (_, y) => Array.from({length: 28}, (_, x) => rgba[(y * 28 + x) * 4] / 255));
+    setBusy(true); setError("");
+    try { setResult(await api.predict(runId, image)); }
+    catch (e) { setError(e instanceof Error ? e.message : "Não foi possível classificar o desenho."); }
+    finally { setBusy(false); }
+  };
+  const probs = result?.probabilities?.[0] ?? [];
+  const top = probs.map((p, i) => ({label: classNames?.[i] ?? String(i), p})).sort((a, b) => b.p - a.p).slice(0, 3);
+  return <div className="section digit-predictor">
+    <div className="eyebrow">Testar o modelo</div>
+    <h4>Desenhe um algarismo</h4>
+    <p className="small muted">Desenhe em branco no quadro preto, como nas imagens do MNIST.</p>
+    <div className="row" style={{alignItems: "flex-start", flexWrap: "wrap"}}>
+      <canvas ref={canvas} width={280} height={280} className="digit-canvas" onPointerDown={start} onPointerMove={move} onPointerUp={() => drawing.current = false} onPointerCancel={() => drawing.current = false} />
+      <div style={{minWidth: 180}}>
+        <div className="row"><button className="btn primary" onClick={predict} disabled={busy}>{busy ? "Analisando…" : "Reconhecer"}</button><button className="btn ghost" onClick={clear}>Limpar</button></div>
+        {result && <div className="prediction-result"><span>Predição</span><b>{result.labels?.[0] ?? result.predictions[0]}</b>{top.map(v => <div key={v.label} className="small">{v.label}: {(v.p * 100).toFixed(1)}%</div>)}</div>}
+        {error && <div className="err small">{error}</div>}
+      </div>
+    </div>
+  </div>;
 }

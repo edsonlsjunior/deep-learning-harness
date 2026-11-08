@@ -143,6 +143,11 @@ table.runs tr.selected td { background: var(--soft-cyan); }
 .chart .chart-title { font: 850 10px var(--mono); letter-spacing: .12em; fill: var(--navy); text-transform: uppercase; }
 canvas.plot { width: 100%; max-width: 340px; aspect-ratio: 1; border-radius: 14px; border: 1px solid var(--line); background: #fff; }
 canvas.img { border-radius: 4px; image-rendering: pixelated; }
+.digit-predictor { margin-top: 16px; }
+.digit-canvas { width: min(280px, 100%); aspect-ratio: 1; background: #000; border: 3px solid var(--navy); border-radius: 14px; cursor: crosshair; touch-action: none; }
+.prediction-result { margin-top: 14px; display: grid; gap: 5px; }
+.prediction-result > span { color: var(--faint); font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; }
+.prediction-result > b { font-size: 3rem; line-height: 1; color: var(--cyan-2); }
 .img-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
 .img-label { width: 90px; }
 table.cm { border-collapse: collapse; font-size: .78rem; }
@@ -166,6 +171,8 @@ pre.json { background: var(--paper); border: 1px solid var(--line); border-radiu
 .chat-head { padding: 14px 16px; border-bottom: 1px solid var(--line-dark); position: relative; z-index: 1; }
 .chat-head .eyebrow { color: var(--cyan); }
 .chat-head h3 { margin: 4px 0 0; font-size: 1.05rem; letter-spacing: -.02em; color: #fff; }
+.provider-main { display: grid; gap: 5px; margin-top: 12px; color: #91a5bb; font: 800 .62rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.provider-main select { width: 100%; background: var(--navy); border: 1px solid var(--navy-3); color: #fff; border-radius: 9px; padding: 9px 10px; font-size: .8rem; text-transform: none; letter-spacing: 0; }
 .chat-tabs { display: flex; gap: 4px; margin-top: 10px; }
 .chat-tabs button { border: 1px solid var(--line-dark); background: #ffffff08; color: #b6c3d2; border-radius: 99px; padding: 4px 11px; font: 800 .6rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .chat-tabs button.active { border-color: var(--cyan); color: var(--cyan); }
@@ -193,6 +200,12 @@ pre.json { background: var(--paper); border: 1px solid var(--line); border-radiu
 .chat-input textarea { width: 100%; background: var(--navy); border: 1.5px solid var(--navy-3); color: #fff; border-radius: 13px; resize: none; padding: 10px 12px; min-height: 64px; }
 .chat-input textarea:focus { border-color: var(--cyan); }
 .chat-input select { background: var(--navy); border-color: var(--navy-3); color: #b6c3d2; padding: 6px 8px; font-size: .74rem; }
+.chat-options { color: #91a5bb; font-size: .75rem; }
+.chat-options summary { cursor: pointer; padding: 7px 0; }
+.chat-options .option-actions { margin-top: 8px; flex-wrap: wrap; }
+.chat-options input { background: var(--navy); border: 1px solid var(--navy-3); color: #fff; border-radius: 8px; padding: 7px 9px; min-width: 150px; }
+.provider-warning { margin: 8px 0 0; color: #f3c883; }
+.harness-controls { padding: 12px 16px; border-bottom: 1px solid var(--line-dark); }
 .suggest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .suggest button { text-align: left; border: 1px solid var(--line-dark); background: #ffffff08; color: #c7d3e2; border-radius: 11px; padding: 8px 10px; font-size: .74rem; }
 .suggest button:hover { border-color: var(--cyan); color: var(--cyan); }

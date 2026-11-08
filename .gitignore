@@ -2,6 +2,9 @@
 __pycache__/
 *.pyc
 backend/.venv/
+backend/.venv-test/
+.mcp.local.json
+.DS_Store
 backend/data/
 
 # Node

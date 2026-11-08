@@ -26,10 +26,12 @@ import shutil
 import subprocess
 import sys
 import threading
+import tempfile
 from pathlib import Path
 from typing import Iterator
 
 from . import db
+from . import harness as H
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 MCP_SERVER = BACKEND_DIR / "mcp_server" / "server.py"
@@ -58,6 +60,12 @@ Regras de trabalho:
 - Ao treinar, informe as métricas finais e interprete-as (overfitting? convergiu? compare com outros runs).
 - Ao escolher hiperparâmetros, explique brevemente o porquê em termos dos conceitos das aulas.
 - Não invente resultados: tudo que você afirmar sobre modelos deve vir das ferramentas.
+- Datasets embutidos: quando o usuário pedir MNIST, Keras MNIST ou reconhecimento de algarismos,
+  use `list_dataset_sources`, depois `add_dataset` com `source="mnist"` (não procure arquivo nem Kaggle).
+  Em seguida crie uma CNN (`architecture="cnn"`) e use `train_model` nessa base. A base `mnist` é a
+  implementação offline do laboratório para o conhecido MNIST 28x28; explique isso se o usuário mencionar Keras.
+- Para um pedido de criação completo, execute a sequência projeto (se necessário) -> base -> modelo -> treino,
+  em vez de apenas descrever os passos. Só pare se uma ferramenta devolver erro real.
 
 Bases do usuário e do Kaggle:
 - Quando a mensagem trouxer "[Arquivo anexado ...]" com um caminho, o arquivo já está no servidor:
@@ -69,7 +77,7 @@ Bases do usuário e do Kaggle:
 """
 
 
-def write_mcp_config() -> Path:
+def write_mcp_config(path=None, agent_token=None) -> Path:
     """Gera o arquivo que diz ao Claude Code como iniciar nosso servidor MCP via stdio."""
     cfg = {"mcpServers": {SERVER_NAME: {
         "type": "stdio",
@@ -77,8 +85,11 @@ def write_mcp_config() -> Path:
         "args": [str(MCP_SERVER)],
         "env": {"DL_LAB_API": API_URL, "PYTHONIOENCODING": "utf-8"},
     }}}
-    MCP_CONFIG.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
-    return MCP_CONFIG
+    if agent_token:
+        cfg["mcpServers"][SERVER_NAME]["env"]["DL_LAB_AGENT_TOKEN"] = agent_token
+    path = path or MCP_CONFIG
+    path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    return path
 
 
 def claude_bin() -> str:
@@ -88,8 +99,8 @@ def claude_bin() -> str:
     return exe
 
 
-def build_command(session_id: str | None, project: dict | None, model: str | None) -> list[str]:
-    prompt = SYSTEM_PROMPT
+def build_command(session_id: str | None, project: dict | None, model: str | None, config_path=None, policy_prompt="") -> list[str]:
+    prompt = SYSTEM_PROMPT + policy_prompt
     if project:
         prompt += f"\nProjeto atual: id={project['id']} nome=\"{project['name']}\".\n"
     else:
@@ -97,7 +108,7 @@ def build_command(session_id: str | None, project: dict | None, model: str | Non
     cmd = [
         claude_bin(), "-p",
         "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-        "--mcp-config", str(MCP_CONFIG), "--strict-mcp-config",
+        "--mcp-config", str(config_path or MCP_CONFIG), "--strict-mcp-config",
         "--tools", "",
         "--allowedTools", f"mcp__{SERVER_NAME}",
         "--permission-mode", "dontAsk",
@@ -157,16 +168,18 @@ def _normalize(ev: dict) -> list[dict]:
     return out
 
 
-def stream_chat(message: str, session_id: str | None, project: dict | None, model: str | None) -> Iterator[str]:
+def stream_chat(message: str, session_id: str | None, project: dict | None, model: str | None, agent_token=None, policy="consult") -> Iterator[str]:
     """Gerador síncrono de linhas SSE (o FastAPI o executa num threadpool)."""
 
     def sse(obj: dict) -> str:
         return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
 
-    write_mcp_config()
+    temporary = tempfile.TemporaryDirectory(prefix="dl-lab-claude-")
+    config_path = write_mcp_config(Path(temporary.name) / "mcp.json", agent_token)
     try:
-        cmd = build_command(session_id, project, model)
+        cmd = build_command(session_id, project, model, config_path, H.instructions(policy) if agent_token else "")
     except RuntimeError as e:
+        temporary.cleanup()
         yield sse({"type": "error", "message": str(e)})
         return
 
@@ -197,3 +210,5 @@ def stream_chat(message: str, session_id: str | None, project: dict | None, mode
     finally:  # cliente desconectou ou terminou: garante que o processo morre
         if proc.poll() is None:
             proc.kill()
+            proc.wait()
+        temporary.cleanup()

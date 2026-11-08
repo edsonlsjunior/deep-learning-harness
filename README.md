@@ -20,11 +20,11 @@ O modelo de linguagem, sozinho, só recebe texto e devolve texto. O **harness** 
 
 | Peça do harness | Onde está neste projeto |
 |---|---|
-| **Loop agêntico** (modelo → ferramenta → resultado → modelo …) | Claude Code em modo headless (`claude -p`) |
+| **Loop agêntico** (modelo → ferramenta → resultado → modelo …) | Codex ou Claude Code em modo headless |
 | **Ferramentas** que o agente pode usar | `backend/mcp_server/server.py` (22 ferramentas MCP) |
 | **Transporte** das ferramentas | MCP via **stdio**: o Claude Code inicia o servidor como subprocesso |
 | **Contexto / instruções** | `--append-system-prompt` em `backend/app/chat.py` (conteúdo das aulas + regras) |
-| **Permissões / sandbox** | `--tools ""` (sem Bash/Edit/Read), `--allowedTools mcp__dl-lab`, `--permission-mode dontAsk`, `cwd` isolado |
+| **Permissões / sandbox** | Política Consultar / Confirmar / Operar, gateway MCP e sandbox read-only do processo |
 | **Memória da conversa** | `--resume <session_id>` |
 | **Observabilidade** | `--output-format stream-json` → SSE → aba **Harness** do chat (comando, system prompt, eventos) |
 
@@ -33,6 +33,10 @@ a lista de ferramentas que o modelo enxerga e o log de eventos de cada turno.
 
 Ponto didático importante: **o servidor MCP é um cliente fino da mesma API REST que a interface usa.** Humano clicando e agente
 chamando ferramentas operam exatamente o mesmo estado — por isso o que o Claude faz aparece imediatamente na tela.
+
+### Modos de permissão
+
+No seletor **Permissão do agente**, use **Consultar** para permitir apenas leituras, **Executar com confirmação** para pausar cada alteração aguardando o botão Aprovar, ou **Operar o laboratório** para permitir alterações de projetos, bases, modelos e treinos. Exclusões sempre pedem confirmação. A aba **Harness** registra a decisão, a ferramenta, os parâmetros, o passo e o motivo. O limite didático é de 40 passos ou 10 minutos por turno; o agente não pode usar shell, arquivos, navegador ou instalar plugins.
 
 ## Conteúdo coberto (das aulas)
 
@@ -61,34 +65,74 @@ duelo D × G (GANs), pesos aprendidos (Perceptron/Adaline).
 
 ## Como rodar
 
-Pré-requisitos: Python 3.11+, Node 18+, e o **Claude Code** instalado e logado (`claude` no PATH).
+Pré-requisitos em Windows e macOS: **Python 3.11+ e Node.js 18+ (preferencialmente LTS)**.
+Claude Code é opcional; a interface e os treinos funcionam sem um provedor de chat.
+Mantenha o repositório numa pasta local, fora de iCloud/OneDrive/Dropbox, para evitar
+que arquivos e dependências sejam removidos do disco durante a execução.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1
+- **macOS:** dê dois cliques em `start.command`, ou execute `python3 start.py` no terminal.
+- **Windows:** dê dois cliques em `start.cmd`, ou execute `py -3 start.py` no terminal.
+- **PowerShell:** `./start.ps1` chama o mesmo inicializador.
+
+O inicializador cria `backend/.venv` com o caminho correto para o sistema,
+instala as dependências locais (usa uv se já estiver disponível; senão pip),
+executa `npm ci`, compila o React e inicia a API servindo também a interface.
+Abre **http://127.0.0.1:8000** depois de confirmar que o backend está pronto.
+Na primeira execução, o download de PyTorch e demais pacotes pode demorar.
+As credenciais da conta do chat permanecem no computador do backend.
+
+Mantenha o terminal aberto; **Ctrl+C** encerra o servidor. Portas ocupadas geram
+uma mensagem, sem encerrar processos de outros aplicativos.
+
+```sh
+python3 start.py --check           # diagnóstico sem instalar (Windows: py -3)
+python3 start.py --setup-only      # preparar dependências e interface
+python3 start.py --port 8002       # usar outra porta para API, interface e MCP
+python3 start.py --no-browser      # não abrir navegador automaticamente
+python3 start.py --skip-setup      # ambiente já preparado, sem recompilar
+python3 start.py --reinstall       # reinstalar dependências e recompilar
 ```
 
-Ou manualmente:
+### Escolher o assistente
 
-```powershell
-# backend
-cd backend
-python -m venv --system-site-packages .venv      # reaproveita o torch já instalado, se houver
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
+Clique em **Detectar disponíveis**. Para **Codex — assinatura ChatGPT**, execute
+`codex login` uma vez e entre com ChatGPT. A integração verifica o login local e
+faz consultas ao laboratório, sem solicitar chave de API. Nesta versão, criação
+e treinamento com Codex são feitos pelos botões da interface. Uso sujeito aos
+limites da conta. O CLI deve estar no PATH; `DL_LAB_CODEX_BIN` aceita seu caminho
+absoluto. No macOS, também é detectado o CLI incluído no aplicativo ChatGPT.
 
-# frontend (outro terminal)
-cd frontend
-npm install
-npm run dev        # http://localhost:5173
-```
+Claude Code exige seu próprio CLI instalado e logado. OpenAI API/Gemini API usam
+`OPENAI_API_KEY`/`GEMINI_API_KEY` no ambiente do backend. Para servidor local,
+configure `LOCAL_LLM_BASE_URL` (padrão `http://127.0.0.1:11434/v1`) e informe um
+modelo com suporte a ferramentas. A detecção consulta os catálogos sem gerar
+texto; catálogo acessível não garante suporte a ferramentas em todos os modelos.
+Não versione credenciais. Cada instalação usa o login do seu próprio usuário.
+
+### Desenvolvimento
+
+O Vite continua disponível em `frontend` com `npm run dev`, na porta 5173.
+Nesse modo, inicie separadamente o backend na porta 8000, com
+`backend/.venv/bin/python` no macOS ou `backend/.venv/Scripts/python.exe` no Windows,
+executando `-m uvicorn app.main:app --app-dir backend --port 8000` a partir da raiz.
 
 ### Usando o mesmo MCP direto do terminal
 
-O arquivo `.mcp.json` na raiz registra o servidor `dl-lab` para o Claude Code. Com o backend rodando, abra `claude` na raiz
-do repositório e peça, por exemplo, *"liste meus projetos do laboratório"*. É o mesmo servidor, agora com outro cliente —
-bom para mostrar que o MCP desacopla as ferramentas de quem as usa.
+`start.py` gera `.mcp.local.json` com os caminhos absolutos corretos para o
+computador e a porta selecionada. Esse arquivo é ignorado pelo Git e deve ser
+regenerado após mover a pasta. Para usar com Claude Code, execute
+`claude --mcp-config .mcp.local.json` com o laboratório rodando. O exemplo
+`.mcp.example.json` substitui a configuração antiga que continha caminho Windows fixo.
 
-Para inspecionar o servidor isoladamente: `npx @modelcontextprotocol/inspector backend/.venv/Scripts/python.exe backend/mcp_server/server.py`.
+O chat gera suas configurações MCP em tempo de execução usando o próprio Python
+do backend, tanto no Windows quanto no macOS.
+
+### Validação
+
+`python -m unittest discover -s tests -v` testa o inicializador, incluindo a
+seleção de caminhos Windows/macOS. Em `backend`, execute com o Python de `.venv`
+`-m unittest discover -s tests -v` para os testes de provedores. A execução real
+foi validada no macOS; o teste do sistema Windows requer uma máquina Windows.
 
 ## Roteiro sugerido para a aula
 

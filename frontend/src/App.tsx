@@ -3,6 +3,7 @@ import { api } from "./api";
 import type { Architecture, CatalogEntry, Project, ProjectSummary } from "./types";
 import ProjectView from "./components/ProjectView";
 import ChatPanel from "./components/ChatPanel";
+import "./responsive.css";
 
 export default function App() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -85,7 +86,7 @@ export default function App() {
           <b>DL</b>
           <div>
             Laboratório de Deep Learning
-            <small>harness · claude code + mcp stdio</small>
+            <small>harness · múltiplos provedores + mcp stdio</small>
           </div>
         </div>
         <div className="top-actions">
@@ -118,7 +119,7 @@ export default function App() {
               </span>
             </button>
           ))}
-          {!projects.length && <p className="muted small">Nenhum projeto ainda. Crie aqui ou peça ao Claude no chat.</p>}
+          {!projects.length && <p className="muted small">Nenhum projeto ainda. Crie aqui ou peça ao assistente no chat.</p>}
         </aside>
 
         <main className="main">
@@ -153,10 +154,10 @@ function Welcome() {
       </h2>
       <p>
         Crie projetos, cadastre bases de dados e treine os modelos das aulas — Perceptron, Adaline, MLP, CNN, RNN/LSTM/GRU, Autoencoders, GANs e
-        Transformers — clicando aqui ou conversando com o Claude no painel ao lado.
+        Transformers — clicando aqui ou conversando com o assistente no painel ao lado.
       </p>
       <p>
-        Tudo que o chat faz passa por um servidor <b>MCP via stdio</b> que o <b>Claude Code</b> inicia localmente. Abra a aba <b>Harness</b> do chat
+        O assistente usa as mesmas ferramentas do laboratório via <b>MCP stdio</b>. Escolha seu provedor no painel e abra a aba <b>Harness</b> do chat
         para ver as engrenagens.
       </p>
     </div>

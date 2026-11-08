@@ -8,6 +8,7 @@ Ambos enxergam exatamente o mesmo estado — esse é o ponto do harness.
 from __future__ import annotations
 
 import uuid
+import os
 from pathlib import Path
 from typing import Any
 
@@ -15,10 +16,11 @@ import httpx
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import architectures as A
-from . import chat, db, files, kaggle, training
+from . import chat, db, files, kaggle, training, providers, codex_chat, harness as H
 from . import datasets as D
 
 app = FastAPI(title="DL Lab API", version="1.0")
@@ -79,6 +81,20 @@ class ChatIn(BaseModel):
     session_id: str | None = None
     project_id: int | None = None
     model: str | None = None
+    provider: str = "claude-code"
+    history: list[dict[str, str]] = Field(default_factory=list, max_length=30)
+    policy: H.Policy = "operate"
+
+
+class AgentCall(BaseModel):
+    method: str
+    path: str
+    tool: str
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
+class ApprovalIn(BaseModel):
+    approved: bool
 
 
 # ------------------------------------------------------------------ catálogo
@@ -309,6 +325,57 @@ def harness():
 @app.post("/api/chat")
 def chat_endpoint(body: ChatIn):
     project = db.one("SELECT * FROM projects WHERE id = ?", (body.project_id,)) if body.project_id else None
-    return StreamingResponse(chat.stream_chat(body.message, body.session_id, project, body.model),
+    run = H.create(body.policy)
+    if body.provider == "codex":
+        source = codex_chat.stream_chat(body.message, body.model, project, body.history, agent_token=run.token, policy=body.policy)
+    elif body.provider != "claude-code":
+        source = providers.stream_chat(body.message, body.provider, body.model, project, body.history, agent_token=run.token, policy=body.policy)
+    else:
+        source = chat.stream_chat(body.message, body.session_id, project, body.model, agent_token=run.token, policy=body.policy)
+    return StreamingResponse(H.stream(run, source, chat.SYSTEM_PROMPT),
                              media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/providers")
+async def list_providers():
+    return [await codex_chat.status() if p["id"] == "codex" else p for p in providers.catalog()]
+
+
+@app.post("/api/harness/execute")
+async def agent_execute(body: AgentCall, request: Request):
+    token = request.headers.get("Authorization", "").removeprefix("Bearer ")
+    if set(body.kwargs) - {"params", "json"}:
+        raise HTTPException(400, "Parâmetros HTTP não permitidos.")
+    async def forward():
+        async with httpx.AsyncClient(base_url=chat.API_URL, timeout=660) as client:
+            response = await client.request(body.method, body.path, **body.kwargs)
+        if response.status_code >= 400:
+            raise HTTPException(response.status_code, response.json().get("detail", "Erro na ferramenta"))
+        return response.json()
+    try:
+        return await H.execute(token, body.method, body.path, body.tool, body.kwargs, forward)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc)) from exc
+
+
+@app.post("/api/harness/runs/{run_id}/approvals/{approval_id}")
+async def agent_approve(run_id: str, approval_id: str, body: ApprovalIn):
+    try:
+        H.approve(run_id, approval_id, body.approved)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"accepted": True}
+
+
+@app.post("/api/providers/detect")
+async def detect_providers():
+    return await providers.detect()
+
+
+# Launcher serves the built React UI from the same origin as the API.
+if os.environ.get("DL_LAB_SERVE_FRONTEND") == "1":
+    frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    if not (frontend_dist / "index.html").is_file():
+        raise RuntimeError("Interface não compilada. Inicie usando start.py.")
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
