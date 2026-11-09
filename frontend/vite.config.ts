@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -8,7 +7,8 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
-      input: { main: resolve(__dirname, "index.html"), apresentacao: resolve(__dirname, "apresentacao.html") },
+      // caminhos relativos sao resolvidos pelo Vite a partir do root (frontend/)
+      input: { main: "index.html", apresentacao: "apresentacao.html" },
     },
   },
   server: {
