@@ -136,6 +136,10 @@ foi validada no macOS; o teste do sistema Windows requer uma máquina Windows.
 
 ## Roteiro sugerido para a aula
 
+Há uma apresentação de apoio (19 slides, “O que é um harness”) em **http://localhost:5173/apresentacao** — também acessível pelo
+botão **Apresentação** na barra superior. Navegue com ← →, `F` = tela cheia, `N` = notas do apresentador.
+O arquivo é `frontend/apresentacao.html` (HTML autocontido, sem React).
+
 1. **Aula 1** — *"Crie um projeto 'Aula 1', adicione and_gate e xor_gate e mostre que o perceptron resolve AND mas não XOR."*
    Depois: *"Agora treine um MLP com 4 neurônios tanh no XOR."* Compare as fronteiras de decisão.
 2. **Aula 2** — *"Adicione digits e compare um MLP com uma CNN pequena."* Discuta parâmetros × acurácia.
@@ -173,3 +177,8 @@ frontend/
 - O agente roda com `cwd` em `backend/data/claude_workspace` e **sem** ferramentas de arquivo/shell: ele só consegue agir
   pelo MCP do laboratório.
 - Treinos rodam em CPU; os padrões de épocas são pequenos para caber no tempo de aula.
+
+## Contribuidores
+
+- edsonlsjunior
+- bela-bs (bela-bs@hotmail.com)
