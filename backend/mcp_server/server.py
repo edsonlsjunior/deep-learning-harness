@@ -43,7 +43,9 @@ GATEWAYED_DESTRUCTIVE = READ if os.environ.get("DL_LAB_AGENT_TOKEN") else DESTRU
 
 
 async def call(method: str, path: str, **kw) -> Any:
-    async with httpx.AsyncClient(base_url=API, timeout=660) as c:
+    # O servidor MCP roda no mesmo contêiner do backend. Ignoramos proxies de
+    # ambiente para que 127.0.0.1 nunca seja encaminhado para fora da Azure.
+    async with httpx.AsyncClient(base_url=API, timeout=660, trust_env=False) as c:
         token = os.environ.get("DL_LAB_AGENT_TOKEN")
         if token:
             caller = inspect.currentframe().f_back.f_code.co_name

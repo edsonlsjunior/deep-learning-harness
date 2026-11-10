@@ -66,6 +66,8 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
   const [detectError, setDetectError] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const [credentialConfigured, setCredentialConfigured] = useState(false);
+  const [anthropicKey, setAnthropicKey] = useState("");
+  const [anthropicConfigured, setAnthropicConfigured] = useState(false);
   const [credentialBusy, setCredentialBusy] = useState(false);
   const [credentialError, setCredentialError] = useState("");
   async function detectProviders() {
@@ -86,6 +88,7 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
         setProviders(await api.providers());
         const state = await api.sessionCredentials();
         setCredentialConfigured(!!state.providers.openai?.configured);
+        setAnthropicConfigured(!!state.providers.anthropic?.configured);
       } catch {
         // A interface continua funcional para os provedores locais mesmo se a API estiver iniciando.
       }
@@ -133,6 +136,38 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
     try {
       await api.removeSessionCredential("openai");
       setCredentialConfigured(false);
+      setProviders(await api.providers());
+    } catch (e: any) {
+      setCredentialError(e.message || "Não foi possível remover a chave.");
+    } finally {
+      setCredentialBusy(false);
+    }
+  }
+
+  async function connectAnthropic(event: FormEvent) {
+    event.preventDefault();
+    if (!anthropicKey.trim() || credentialBusy) return;
+    setCredentialBusy(true);
+    setCredentialError("");
+    try {
+      await api.saveSessionCredential("anthropic", anthropicKey);
+      setAnthropicKey("");
+      setAnthropicConfigured(true);
+      setProviders(await api.providers());
+    } catch (e: any) {
+      setAnthropicKey("");
+      setCredentialError(e.message || "Não foi possível conectar a chave.");
+    } finally {
+      setCredentialBusy(false);
+    }
+  }
+
+  async function disconnectAnthropic() {
+    setCredentialBusy(true);
+    setCredentialError("");
+    try {
+      await api.removeSessionCredential("anthropic");
+      setAnthropicConfigured(false);
       setProviders(await api.providers());
     } catch (e: any) {
       setCredentialError(e.message || "Não foi possível remover a chave.");
@@ -322,6 +357,36 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
             )}
             {credentialError && <p className="small credential-error" role="status">{credentialError}</p>}
             {!credentialConfigured && <p className="small credential-note">A assinatura ChatGPT/Codex e a API são serviços distintos; use uma chave criada na Plataforma OpenAI.</p>}
+          </div>
+        )}
+        {provider === "anthropic" && (
+          <div className="credential-card">
+            <div>
+              <b>Chave pessoal da API Claude</b>
+              <p>Usada só nesta sessão do navegador. Não é gravada no projeto, no computador, nos logs ou no GitHub.</p>
+            </div>
+            {anthropicConfigured ? (
+              <div className="credential-connected">
+                <span>● Conectada nesta sessão</span>
+                <button className="btn dark-ghost sm" type="button" onClick={disconnectAnthropic} disabled={credentialBusy}>Remover</button>
+              </div>
+            ) : (
+              <form className="credential-form" onSubmit={connectAnthropic}>
+                <input
+                  aria-label="Chave da API Claude Anthropic"
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={anthropicKey}
+                  disabled={credentialBusy || busy}
+                  onChange={(e) => setAnthropicKey(e.target.value)}
+                  placeholder="Cole sua chave da API Anthropic"
+                />
+                <button className="btn primary sm" type="submit" disabled={!anthropicKey.trim() || credentialBusy || busy}>{credentialBusy ? "Conectando…" : "Conectar"}</button>
+              </form>
+            )}
+            {credentialError && <p className="small credential-error" role="status">{credentialError}</p>}
+            {!anthropicConfigured && <p className="small credential-note">O login/assinatura do Claude Code e a API Anthropic são serviços distintos; use uma chave criada no Claude Console.</p>}
           </div>
         )}
         <div className="chat-tabs">

@@ -73,8 +73,9 @@ def _session_id(request: Request, response: Response) -> str:
 
 
 def _session_provider_keys(request: Request) -> dict[str, str]:
-    key = session_credentials.get(request.cookies.get(COOKIE_NAME), "openai")
-    return {"openai": key} if key else {}
+    session_id = request.cookies.get(COOKIE_NAME)
+    return {provider: key for provider in SUPPORTED_PROVIDERS
+            if (key := session_credentials.get(session_id, provider))}
 
 
 def _owner_session(request: Request, response: Response | None = None) -> str | None:
@@ -520,7 +521,9 @@ async def agent_execute(body: AgentCall, request: Request):
     if set(body.kwargs) - {"params", "json"}:
         raise HTTPException(400, "Parâmetros HTTP não permitidos.")
     async def forward():
-        async with httpx.AsyncClient(base_url=chat.API_URL, timeout=660) as client:
+        # Esta é uma chamada de retorno para a própria API; ela não deve usar
+        # proxies de ambiente presentes na hospedagem.
+        async with httpx.AsyncClient(base_url=chat.API_URL, timeout=660, trust_env=False) as client:
             headers = {}
             if owner := H.owner_for(token):
                 headers = {"X-DL-Lab-Owner": owner, "X-DL-Lab-Gateway": token}

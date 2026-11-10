@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 COOKIE_NAME = "dl_lab_session"
 TTL_SECONDS = max(300, min(int(os.environ.get("DL_LAB_SESSION_KEY_TTL", "1800")), 86_400))
-SUPPORTED_PROVIDERS = frozenset({"openai"})
+SUPPORTED_PROVIDERS = frozenset({"openai", "anthropic"})
 
 
 @dataclass

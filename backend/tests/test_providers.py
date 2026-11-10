@@ -83,11 +83,11 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("secret-test-key", json.dumps(found))
 
     async def collect(self, provider="openai", history=None):
-        with patch.dict("sys.modules", {"app.chat": SimpleNamespace(SYSTEM_PROMPT="Laboratório")}), patch("mcp.ClientSession", Session), patch("mcp.client.stdio.stdio_client", stdio), patch.object(providers.httpx, "AsyncClient", Client), patch.dict("os.environ", {"OPENAI_API_KEY": "test-only", "GEMINI_API_KEY": "test-only"}):
+        with patch.dict("sys.modules", {"app.chat": SimpleNamespace(SYSTEM_PROMPT="Laboratório")}), patch("mcp.ClientSession", Session), patch("mcp.client.stdio.stdio_client", stdio), patch.object(providers.httpx, "AsyncClient", Client), patch.dict("os.environ", {"OPENAI_API_KEY": "test-only", "ANTHROPIC_API_KEY": "test-only", "GEMINI_API_KEY": "test-only"}):
             return [e async for e in providers.agent_events("Liste projetos", provider, "test-model", None, history or [])]
 
     async def test_tool_roundtrip_all_api_providers(self):
-        for provider in providers.PROVIDERS:
+        for provider in ("openai", "gemini", "local"):
             Session.calls = []
             Client.requests = []
             Client.replies = [
@@ -98,6 +98,25 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(Session.calls, [("list_projects", {})])
             self.assertEqual([e["type"] for e in events], ["init", "tool_use", "tool_result", "text_delta", "result"])
             self.assertEqual(Client.requests[1][1]["json"]["messages"][-1]["role"], "tool")
+
+    async def test_anthropic_tool_roundtrip(self):
+        class AnthropicClient(Client):
+            replies = [
+                [{"type": "tool_use", "id": "call1", "name": "list_projects", "input": {}}],
+                [{"type": "text", "text": "Projeto Aula encontrado."}],
+            ]
+
+            async def post(self, url, **kwargs):
+                self.requests.append((url, copy.deepcopy(kwargs)))
+                return SimpleNamespace(status_code=200, json=lambda: {"content": self.replies.pop(0)})
+
+        Session.calls = []
+        AnthropicClient.requests = []
+        with patch.dict("sys.modules", {"app.chat": SimpleNamespace(SYSTEM_PROMPT="Laboratório")}), patch("mcp.ClientSession", Session), patch("mcp.client.stdio.stdio_client", stdio), patch.object(providers.httpx, "AsyncClient", AnthropicClient), patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-only"}, clear=True):
+            events = [event async for event in providers.agent_events("Liste projetos", "anthropic", "claude-haiku-4-5", None, [])]
+        self.assertEqual(Session.calls, [("list_projects", {})])
+        self.assertEqual([event["type"] for event in events], ["init", "tool_use", "tool_result", "text_delta", "result"])
+        self.assertEqual(AnthropicClient.requests[0][1]["headers"]["x-api-key"], "test-only")
 
     async def test_reject_unknown_tool(self):
         Client.replies = [{"role": "assistant", "content": None, "tool_calls": [{"id": "bad", "function": {"name": "shell", "arguments": "{}"}}]}]
