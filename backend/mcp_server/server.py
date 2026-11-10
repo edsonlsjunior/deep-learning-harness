@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 import os
 import inspect
+from contextvars import ContextVar
+from contextlib import contextmanager
 from typing import Any
 
 import httpx
@@ -22,6 +24,20 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
 API = os.environ.get("DL_LAB_API", "http://127.0.0.1:8000").rstrip("/")
+
+# Quando o agente roda dentro da API web, as mesmas ferramentas são executadas
+# no processo do Harness. Isso evita uma requisição HTTP circular (problemática
+# em alguns provedores de contêiner) e preserva a política de autorização.
+_IN_PROCESS_GATEWAY: ContextVar[Any | None] = ContextVar("dl_lab_in_process_gateway", default=None)
+
+
+@contextmanager
+def in_process_gateway(callback):
+    token = _IN_PROCESS_GATEWAY.set(callback)
+    try:
+        yield
+    finally:
+        _IN_PROCESS_GATEWAY.reset(token)
 
 mcp = MCPServer(
     name="dl-lab",
@@ -43,12 +59,14 @@ GATEWAYED_DESTRUCTIVE = READ if os.environ.get("DL_LAB_AGENT_TOKEN") else DESTRU
 
 
 async def call(method: str, path: str, **kw) -> Any:
+    caller = inspect.currentframe().f_back.f_code.co_name
+    if gateway := _IN_PROCESS_GATEWAY.get():
+        return await gateway(method, path, caller, kw)
     # O servidor MCP roda no mesmo contêiner do backend. Ignoramos proxies de
     # ambiente para que 127.0.0.1 nunca seja encaminhado para fora da Azure.
     async with httpx.AsyncClient(base_url=API, timeout=660, trust_env=False) as c:
         token = os.environ.get("DL_LAB_AGENT_TOKEN")
         if token:
-            caller = inspect.currentframe().f_back.f_code.co_name
             headers = {"Authorization": f"Bearer {token}"}
             if owner := os.environ.get("DL_LAB_OWNER_SESSION"):
                 headers["X-DL-Lab-Owner"] = owner

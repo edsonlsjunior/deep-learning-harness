@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -24,29 +25,62 @@ PROVIDERS = {
 }
 
 
-async def mcp_status() -> dict:
-    """Diagnóstico seguro do subprocesso MCP, sem chamar modelo nem usar credencial.
+class _DirectMcpSession:
+    def __init__(self, mcp):
+        self.mcp = mcp
 
-    Além da inicialização, executa uma leitura real pelo gateway do Harness. Isso
-    confirma que o subprocesso consegue voltar ao servidor no contêiner.
-    """
-    from mcp import ClientSession, StdioServerParameters
-    from mcp.client.stdio import stdio_client
-    server = Path(__file__).resolve().parent.parent / "mcp_server" / "server.py"
+    async def initialize(self):
+        return None
+
+    async def list_tools(self):
+        return type("Tools", (), {"tools": await self.mcp.list_tools()})()
+
+    async def call_tool(self, name, args):
+        return await self.mcp.call_tool(name, args)
+
+
+@asynccontextmanager
+async def direct_mcp_session(agent_token, owner_session=None):
+    """Executa as ferramentas MCP no mesmo processo, mantendo o gateway Harness."""
+    from mcp_server import server as local_mcp
+
+    async def gateway(method, path, tool, kwargs):
+        # Import tardio evita o ciclo main -> providers -> main na inicialização.
+        from .main import app
+
+        async def forward():
+            headers = {}
+            if owner := H.owner_for(agent_token):
+                headers = {"X-DL-Lab-Owner": owner, "X-DL-Lab-Gateway": agent_token}
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://dl-lab", timeout=660) as client:
+                response = await client.request(method, path, headers=headers, **kwargs)
+            if response.status_code >= 400:
+                try:
+                    detail = response.json().get("detail", "Erro na ferramenta")
+                except (ValueError, AttributeError):
+                    detail = "Erro na ferramenta"
+                raise ValueError(f"Erro {response.status_code}: {detail}")
+            return response.json()
+
+        return await H.execute(agent_token, method, path, tool, kwargs, forward)
+
+    with local_mcp.in_process_gateway(gateway):
+        yield _DirectMcpSession(local_mcp.mcp)
+
+
+async def mcp_status() -> dict:
+    """Diagnóstico seguro da ponte entre MCP e Harness, sem modelo ou credencial."""
     run = H.create("consult")
-    params = StdioServerParameters(command=sys.executable, args=[str(server)], env={**os.environ, "PYTHONIOENCODING": "utf-8", "DL_LAB_AGENT_TOKEN": run.token})
     try:
-        async with stdio_client(params) as (reader, writer):
-            async with ClientSession(reader, writer) as session:
-                async with asyncio.timeout(20):
-                    await session.initialize()
-                    tools = (await session.list_tools()).tools
-                    probe = await session.call_tool("list_projects", {})
-                return {"ok": not bool(probe.is_error), "tools": len(tools), "gateway": "ok" if not probe.is_error else "erro"}
-    except TimeoutError:
-        return {"ok": False, "detail": "O subprocesso MCP não respondeu em 20 segundos."}
+        async with direct_mcp_session(run.token) as session:
+            async with asyncio.timeout(20):
+                await session.initialize()
+                tools = (await session.list_tools()).tools
+                probe = await session.call_tool("list_projects", {})
+        return {"ok": not bool(probe.is_error), "tools": len(tools), "gateway": "ok" if not probe.is_error else "erro"}
     except Exception:
-        return {"ok": False, "detail": "O subprocesso MCP não iniciou corretamente."}
+        return {"ok": False, "detail": "A ponte interna entre MCP e Harness não respondeu corretamente."}
     finally:
         H.close(run)
 
@@ -105,8 +139,6 @@ async def detect(session_credentials: dict[str, str] | None = None):
 
 async def anthropic_agent_events(message, model, project, history, agent_token, policy, api_key, owner_session):
     """Loop nativo da Messages API da Anthropic, incluindo ferramentas MCP."""
-    from mcp import ClientSession, StdioServerParameters
-    from mcp.client.stdio import stdio_client
     from .chat import SYSTEM_PROMPT
 
     started = time.monotonic()
@@ -118,15 +150,9 @@ async def anthropic_agent_events(message, model, project, history, agent_token, 
         if item.get("role") in ("user", "assistant") and isinstance(item.get("content"), str):
             messages.append({"role": item["role"], "content": item["content"][:20000]})
     messages.append({"role": "user", "content": message})
-    server = Path(__file__).resolve().parent.parent / "mcp_server" / "server.py"
-    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
-    if agent_token:
-        env["DL_LAB_AGENT_TOKEN"] = agent_token
-    if owner_session:
-        env["DL_LAB_OWNER_SESSION"] = owner_session
-    params = StdioServerParameters(command=sys.executable, args=[str(server)], env=env)
-    async with stdio_client(params) as (reader, writer):
-        async with ClientSession(reader, writer) as session:
+    async with direct_mcp_session(agent_token, owner_session) as session:
+        # Mantém o bloco de protocolo agrupado dentro da sessão direta.
+        if True:
             try:
                 async with asyncio.timeout(20):
                     await session.initialize()
@@ -177,8 +203,6 @@ async def anthropic_agent_events(message, model, project, history, agent_token, 
 
 async def agent_events(message, provider, model, project, history, agent_token=None, policy="consult", api_key=None, owner_session=None):
     started = time.monotonic()
-    from mcp import ClientSession, StdioServerParameters
-    from mcp.client.stdio import stdio_client
     from .chat import SYSTEM_PROMPT
 
     if provider not in PROVIDERS:
@@ -204,15 +228,9 @@ async def agent_events(message, provider, model, project, history, agent_token=N
         if item.get("role") in ("user", "assistant") and isinstance(item.get("content"), str):
             messages.append({"role": item["role"], "content": item["content"][:20000]})
     messages.append({"role": "user", "content": message})
-    server = Path(__file__).resolve().parent.parent / "mcp_server" / "server.py"
-    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
-    if agent_token:
-        env["DL_LAB_AGENT_TOKEN"] = agent_token
-    if owner_session:
-        env["DL_LAB_OWNER_SESSION"] = owner_session
-    params = StdioServerParameters(command=sys.executable, args=[str(server)], env=env)
-    async with stdio_client(params) as (reader, writer):
-        async with ClientSession(reader, writer) as session:
+    async with direct_mcp_session(agent_token, owner_session) as session:
+        # Mantém o bloco de protocolo agrupado dentro da sessão direta.
+        if True:
             try:
                 async with asyncio.timeout(20):
                     await session.initialize()

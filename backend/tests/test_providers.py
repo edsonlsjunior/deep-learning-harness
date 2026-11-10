@@ -40,6 +40,12 @@ async def stdio(*args):
     yield (None, None)
 
 
+@asynccontextmanager
+async def direct_session(*args):
+    """Substitui a ponte MCP interna nos testes de contrato do provedor."""
+    yield Session()
+
+
 class Client:
     requests = []
     replies = []
@@ -83,7 +89,7 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("secret-test-key", json.dumps(found))
 
     async def collect(self, provider="openai", history=None):
-        with patch.dict("sys.modules", {"app.chat": SimpleNamespace(SYSTEM_PROMPT="Laboratório")}), patch("mcp.ClientSession", Session), patch("mcp.client.stdio.stdio_client", stdio), patch.object(providers.httpx, "AsyncClient", Client), patch.dict("os.environ", {"OPENAI_API_KEY": "test-only", "ANTHROPIC_API_KEY": "test-only", "GEMINI_API_KEY": "test-only"}):
+        with patch.dict("sys.modules", {"app.chat": SimpleNamespace(SYSTEM_PROMPT="Laboratório")}), patch.object(providers, "direct_mcp_session", direct_session), patch.object(providers.httpx, "AsyncClient", Client), patch.dict("os.environ", {"OPENAI_API_KEY": "test-only", "ANTHROPIC_API_KEY": "test-only", "GEMINI_API_KEY": "test-only"}):
             return [e async for e in providers.agent_events("Liste projetos", provider, "test-model", None, history or [])]
 
     async def test_tool_roundtrip_all_api_providers(self):
@@ -112,7 +118,7 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
 
         Session.calls = []
         AnthropicClient.requests = []
-        with patch.dict("sys.modules", {"app.chat": SimpleNamespace(SYSTEM_PROMPT="Laboratório")}), patch("mcp.ClientSession", Session), patch("mcp.client.stdio.stdio_client", stdio), patch.object(providers.httpx, "AsyncClient", AnthropicClient), patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-only"}, clear=True):
+        with patch.dict("sys.modules", {"app.chat": SimpleNamespace(SYSTEM_PROMPT="Laboratório")}), patch.object(providers, "direct_mcp_session", direct_session), patch.object(providers.httpx, "AsyncClient", AnthropicClient), patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-only"}, clear=True):
             events = [event async for event in providers.agent_events("Liste projetos", "anthropic", "claude-haiku-4-5", None, [])]
         self.assertEqual(Session.calls, [("list_projects", {})])
         self.assertEqual([event["type"] for event in events], ["init", "tool_use", "tool_result", "text_delta", "result"])
@@ -133,7 +139,7 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
     async def test_runtime_key_is_used_without_environment_variable(self):
         Client.requests = []
         Client.replies = [{"role": "assistant", "content": "ok"}]
-        with patch.dict("sys.modules", {"app.chat": SimpleNamespace(SYSTEM_PROMPT="Laboratório")}), patch("mcp.ClientSession", Session), patch("mcp.client.stdio.stdio_client", stdio), patch.object(providers.httpx, "AsyncClient", Client), patch.dict("os.environ", {}, clear=True):
+        with patch.dict("sys.modules", {"app.chat": SimpleNamespace(SYSTEM_PROMPT="Laboratório")}), patch.object(providers, "direct_mcp_session", direct_session), patch.object(providers.httpx, "AsyncClient", Client), patch.dict("os.environ", {}, clear=True):
             events = [e async for e in providers.agent_events("oi", "openai", "test-model", None, [], api_key="session-only-key")]
         self.assertEqual(events[-1]["type"], "result")
         self.assertEqual(Client.requests[0][1]["headers"], {"Authorization": "Bearer session-only-key"})
