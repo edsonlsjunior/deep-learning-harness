@@ -139,6 +139,43 @@
   .big-eq { font-size: 104px; font-weight: 850; letter-spacing: -.03em; color: var(--navy); line-height: 1; }
   .big-eq span { color: var(--cyan-ink); }
 
+  /* seção LLM: imagens e movimento didático */
+  .llm-section { background: linear-gradient(100deg, #071328 0%, #0b1e3b 46%, #09162b 100%); }
+  .llm-section::before { content: ""; position: absolute; inset: 0; z-index: 0; background: linear-gradient(90deg, #071328 3%, #071328e8 40%, #07132850 76%, #07132820); }
+  .llm-section .llm-hero-art { position: absolute; z-index: 0; width: 1120px; height: 630px; object-fit: cover; right: -10px; top: 190px; opacity: .93; border-radius: 34px; box-shadow: 0 26px 80px #0008; }
+  .llm-section .eyebrow, .llm-section h1, .llm-section .lead, .llm-section .muted { position: relative; z-index: 1; }
+  .llm-chip { display: inline-flex; align-items: center; gap: 12px; background: #ffffff12; color: var(--on-dark); border: 1px solid #ffffff2e; border-radius: 99px; padding: 10px 18px; font: 700 20px var(--mono); letter-spacing: .06em; }
+  .llm-chip::before { content: ""; width: 11px; height: 11px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 16px var(--cyan); animation: llmPulse 1.8s ease-in-out infinite; }
+  .token-river { display: flex; gap: 14px; align-items: center; overflow: hidden; padding: 12px 0; }
+  .token-river span { display: inline-block; min-width: 100px; padding: 12px 17px; border-radius: 14px; text-align: center; font: 700 21px var(--mono); color: var(--navy); background: var(--soft-cyan); border: 1px solid var(--cyan); animation: tokenDrift 3.7s ease-in-out infinite; }
+  .token-river span:nth-child(2) { background: var(--soft-violet); border-color: var(--violet); animation-delay: -.8s; }
+  .token-river span:nth-child(3) { background: var(--soft-blue); border-color: var(--blue); animation-delay: -1.6s; }
+  .token-river span:nth-child(4) { background: var(--soft-coral); border-color: var(--coral); animation-delay: -2.4s; }
+  .weight-field { position: relative; min-height: 220px; border-radius: 24px; overflow: hidden; background: radial-gradient(circle at 65% 40%, #22c8dd55, transparent 26%), linear-gradient(135deg, #10233d, #1c3860); }
+  .weight-field i { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 18px var(--cyan); animation: weightSpark 2.8s ease-in-out infinite; }
+  .weight-field i:nth-child(1) { left: 16%; top: 68%; } .weight-field i:nth-child(2) { left: 37%; top: 27%; animation-delay: -.5s; background: #aa93ff; box-shadow: 0 0 18px #aa93ff; } .weight-field i:nth-child(3) { left: 61%; top: 54%; animation-delay: -1.1s; } .weight-field i:nth-child(4) { left: 77%; top: 23%; animation-delay: -1.7s; background: #ffbf68; box-shadow: 0 0 18px #ffbf68; } .weight-field i:nth-child(5) { left: 86%; top: 72%; animation-delay: -2.2s; }
+  .weight-field::before, .weight-field::after { content: ""; position: absolute; height: 2px; transform-origin: left; background: linear-gradient(90deg, #22c8dd00, #22c8ddaa, #a993ff00); animation: scanLine 3.4s ease-in-out infinite; }
+  .weight-field::before { width: 380px; left: 16%; top: 68%; transform: rotate(-28deg); } .weight-field::after { width: 330px; left: 37%; top: 27%; transform: rotate(22deg); animation-delay: -1.4s; }
+  .context-art { width: 760px; height: 420px; object-fit: cover; border-radius: 28px; box-shadow: 0 18px 50px #10233d2b; }
+  .context-bar > div { animation: contextGlow 4.5s ease-in-out infinite; } .context-bar > div:nth-child(2) { animation-delay: -.7s; } .context-bar > div:nth-child(3) { animation-delay: -1.4s; } .context-bar > div:nth-child(4) { animation-delay: -2.1s; } .context-bar > div:nth-child(5) { animation-delay: -2.8s; }
+  .number-pop { animation: numberPop 2.6s ease-in-out infinite; transform-origin: left center; }
+  .control-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 22px; flex: 1; }
+  .control-meter { background: var(--white); border: 1.5px solid var(--line); border-radius: 22px; padding: 24px 28px; }
+  .control-meter b { display: block; color: var(--navy); font-size: 28px; } .control-meter p { color: var(--muted); font-size: 22px; margin-top: 5px; }
+  .control-track { height: 13px; margin-top: 16px; border-radius: 99px; background: var(--soft-blue); overflow: hidden; }
+  .control-track span { display: block; height: 100%; width: 58%; border-radius: inherit; background: linear-gradient(90deg, var(--cyan), var(--blue)); animation: levelWave 3.6s ease-in-out infinite; transform-origin: left; }
+  .control-meter:nth-child(2) .control-track span { width: 34%; background: linear-gradient(90deg, var(--violet), var(--blue)); animation-delay: -.8s; }
+  .control-meter:nth-child(3) .control-track span { width: 72%; background: linear-gradient(90deg, var(--amber), var(--coral)); animation-delay: -1.6s; }
+  .control-meter:nth-child(4) .control-track span { width: 48%; background: linear-gradient(90deg, var(--green), var(--cyan)); animation-delay: -2.4s; }
+  @keyframes llmPulse { 50% { transform: scale(1.55); opacity: .45; } }
+  @keyframes tokenDrift { 0%, 100% { transform: translateX(-8px); } 50% { transform: translateX(14px) translateY(-6px); } }
+  @keyframes weightSpark { 0%, 100% { transform: scale(.75); opacity: .5; } 50% { transform: scale(1.65); opacity: 1; } }
+  @keyframes scanLine { 0%, 100% { opacity: .25; transform-origin: left; } 50% { opacity: 1; } }
+  @keyframes contextGlow { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.13); box-shadow: inset 0 0 0 2px #ffffff7d; } }
+  @keyframes numberPop { 50% { transform: scale(1.06); filter: drop-shadow(0 10px 12px #22c8dd55); } }
+  @keyframes levelWave { 50% { transform: scaleX(.62); } }
+  @media (prefers-reduced-motion: reduce) { .llm-chip::before, .token-river span, .weight-field i, .weight-field::before, .weight-field::after, .context-bar > div, .number-pop, .control-track span { animation: none; } }
+
   /* chrome de navegação */
   #bar { position: fixed; left: 0; bottom: 0; height: 5px; background: linear-gradient(90deg, var(--cyan), var(--blue)); transition: width .3s; z-index: 10; }
   #hud { position: fixed; right: 18px; bottom: 16px; display: flex; gap: 8px; align-items: center; z-index: 10; font: 600 13px var(--mono); color: #9fb0c6; }
@@ -156,24 +193,17 @@
 <body>
 <div id="stage">
 
-<!-- ====================================================== 1. capa -->
-<section class="slide dark" style="flex-direction:row;align-items:center;gap:96px">
-  <div class="col grow" style="gap:30px">
-    <p class="eyebrow">Redes Neurais e Deep Learning · Laboratório</p>
-    <h1>Harness</h1>
-    <p class="lead" style="color:var(--white)">O que transforma um <em class="accent">LLM</em> em um agente</p>
-    <p class="muted">Do modelo de linguagem “puro” ao agente que cria, treina e compara redes neurais na nossa plataforma.</p>
+<!-- ====================================================== 1. abertura LLM -->
+<section class="slide dark llm-section" style="justify-content:center;gap:28px">
+  <img class="llm-hero-art" src="assets/llm-transformer-hero.png" alt="Ilustração abstrata de camadas de um modelo de linguagem" />
+  <p class="eyebrow">01 · LLMs</p>
+  <h1 style="font-size:154px">LLMs</h1>
+  <p class="lead" style="max-width:760px;color:var(--white)">O motor que prevê o próximo token</p>
+  <p class="muted" style="max-width:670px">Antes de falar de agentes, vamos abrir o modelo: pesos, tokens, contexto e controles de geração.</p>
+  <div class="row" style="gap:12px;margin-top:16px">
+    <span class="llm-chip">pesos</span><span class="llm-chip">tokens</span><span class="llm-chip">contexto</span>
   </div>
-  <div class="col center" style="width:600px;gap:22px;padding:48px;border:3px dashed var(--cyan);border-radius:34px">
-    <p class="eyebrow" style="margin:0">harness</p>
-    <div class="row" style="gap:14px"><span class="pill">ferramentas</span><span class="pill">contexto</span></div>
-    <div style="background:linear-gradient(135deg,var(--cyan),var(--blue));border-radius:24px;padding:30px 80px;box-shadow:0 18px 50px #22c8dd44">
-      <b style="font-size:80px;color:var(--ink);letter-spacing:-.03em">LLM</b>
-    </div>
-    <div class="row" style="gap:14px"><span class="pill">memória</span><span class="pill">permissões</span></div>
-    <div class="row" style="gap:14px"><span class="pill">loop</span><span class="pill">logs</span></div>
-  </div>
-  <aside class="notes">Objetivo: entender que o “agente” não é só o modelo. O modelo é a peça central, mas quem dá a ele mãos, memória e limites é o harness. No fim vamos abrir o capô da nossa própria plataforma e mexer no harness dela. Atalhos: setas para navegar, F para tela cheia, N para estas notas.</aside>
+  <aside class="notes">Nova abertura da seção. Mostre a imagem como uma metáfora: fragmentos entram, passam por muitas camadas e uma previsão sai. Diga que vamos entender o motor antes de acoplar o harness, que dá ao motor ferramentas, memória e permissões.</aside>
 </section>
 
 <!-- ====================================================== 2. o que é um LLM -->
@@ -195,9 +225,162 @@
   <aside class="notes">Ligar com a disciplina: um LLM é um Transformer (decoder) treinado para prever o próximo token. É uma função pura: tokens entram, probabilidades saem. Guardar três propriedades, porque o harness existe justamente para compensar cada uma: só gera texto (não age), conhecimento fixo (não consulta), sem estado (não lembra).</aside>
 </section>
 
-<!-- ====================================================== 3. LLM puro -->
+<!-- ====================================================== 3. parâmetros -->
 <section class="slide">
-  <div><p class="eyebrow">01 · Fundamentos</p><h2>LLM “puro”: texto entra, texto sai</h2></div>
+  <div><p class="eyebrow">01 · Por dentro do LLM</p><h2>“Parâmetro” pode significar duas coisas</h2></div>
+  <div class="weight-field" aria-label="Pesos de uma rede neural em movimento"><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="grid g2" style="flex:1">
+    <div class="card t-blue" style="justify-content:center;padding:46px">
+      <span class="tag">aprendidos no treinamento</span>
+      <h3 style="font-size:44px">Pesos do modelo</h3>
+      <p style="font-size:28px">Bilhões de números ajustados durante o treinamento. Eles determinam como os tokens são transformados e quais continuidades recebem maior probabilidade.</p>
+      <div class="callout">Ex.: um modelo “7B” possui aproximadamente 7 bilhões de parâmetros.</div>
+    </div>
+    <div class="card t-violet" style="justify-content:center;padding:46px">
+      <span class="tag">escolhidos durante o uso</span>
+      <h3 style="font-size:44px">Configurações de geração</h3>
+      <p style="font-size:28px">Valores que controlam a execução de cada pedido, quando o produto e o modelo permitem.</p>
+      <div class="callout" style="border-color:var(--violet);background:var(--soft-violet)">Ex.: limite de saída, esforço de raciocínio e aleatoriedade.</div>
+    </div>
+  </div>
+  <aside class="notes">Abra perguntando: quando alguém diz “o modelo tem 70 bilhões de parâmetros”, está falando da mesma coisa que temperatura 0,2? Não. A palavra aparece nos dois contextos, mas os pesos foram aprendidos no treinamento e as configurações controlam uma execução.</aside>
+</section>
+
+<!-- ====================================================== 4. bilhões -->
+<section class="slide">
+  <div><p class="eyebrow">01 · Por dentro do LLM</p><h2>O que significam bilhões de parâmetros</h2></div>
+  <div class="row center" style="gap:48px;flex:1">
+    <div class="col" style="width:660px;gap:24px">
+      <p class="big-eq number-pop" style="font-size:130px"><span>7B</span></p>
+      <p class="lead muted">Cerca de sete bilhões de valores numéricos aprendidos.</p>
+      <div class="callout">Eles não são sete bilhões de fatos armazenados. O conhecimento aparece distribuído nas relações entre muitos pesos.</div>
+    </div>
+    <div class="grow">
+      <table>
+        <tr><th>Tamanho</th><th>16 bits</th><th>4 bits</th></tr>
+        <tr><td>7 bilhões</td><td>≈ 14 GB</td><td>≈ 3,5 GB</td></tr>
+        <tr><td>70 bilhões</td><td>≈ 140 GB</td><td>≈ 35 GB</td></tr>
+      </table>
+      <p class="small muted" style="margin-top:24px">Estimativa apenas para armazenar os pesos. A execução também usa memória para contexto, ativações e estruturas do sistema.</p>
+    </div>
+  </div>
+  <div class="callout" style="border-color:var(--amber);background:var(--soft-amber)"><b>Modelo maior não garante melhor resultado.</b> Dados, arquitetura, treinamento, especialização e ferramentas também importam.</div>
+  <aside class="notes">A conta é parâmetros × bytes por parâmetro. Em 16 bits, cada parâmetro ocupa aproximadamente 2 bytes. Em 4 bits, aproximadamente meio byte. A quantização reduz memória ao representar os pesos com menor precisão. Fonte: https://huggingface.co/docs/transformers/quantization/overview</aside>
+</section>
+
+<!-- ====================================================== 5. tokens -->
+<section class="slide">
+  <div><p class="eyebrow">01 · Por dentro do LLM</p><h2>Tokens: a unidade que o modelo processa</h2></div>
+  <div class="row center" style="gap:50px;flex:1">
+    <div class="col" style="width:760px;gap:28px">
+      <p class="lead">Antes de entrar na rede, o texto passa por um <b>tokenizador</b>.</p>
+      <div class="token-river" aria-label="Tokens em movimento">
+        <span>program</span>
+        <span>ação</span>
+        <span> com</span>
+        <span> IA</span>
+      </div>
+      <p class="small muted">Ilustração. A divisão exata depende do modelo, do vocabulário e do idioma.</p>
+    </div>
+    <div class="col grow" style="gap:22px">
+      <p class="ok">Um token pode ser palavra, parte de palavra, pontuação ou espaço associado</p>
+      <p class="ok">Entrada e saída consomem tokens</p>
+      <p class="ok">Ferramentas, schemas, imagens e arquivos também ocupam contexto</p>
+      <p class="ok">Idiomas diferentes podem gerar contagens diferentes</p>
+    </div>
+  </div>
+  <div class="callout">Em inglês, uma aproximação comum é <b>1 token ≈ 4 caracteres</b>. Para português, código e textos técnicos, conte de verdade quando o limite importar.</div>
+  <aside class="notes">A divisão mostrada é apenas visual. Não afirme que todo modelo tokeniza a frase daquele jeito. A OpenAI explica que token pode representar caractere, parte de palavra, palavra inteira ou pontuação, e que idiomas variam. Fonte: https://help.openai.com/en/articles/4936856-understanding-and-counting-tokens</aside>
+</section>
+
+<!-- ====================================================== 6. contexto -->
+<section class="slide">
+  <div><p class="eyebrow">01 · Por dentro do LLM</p><h2>Janela de contexto</h2></div>
+  <p class="lead muted">É o limite de tokens que o modelo consegue considerar em uma execução.</p>
+  <div class="row center" style="gap:44px;flex:1">
+    <img class="context-art" src="assets/llm-context-window.png" alt="Ilustração de uma janela de contexto com documentos e mensagens" />
+    <div class="col grow" style="gap:22px;justify-content:center">
+      <div class="row context-bar" style="gap:0;height:150px;border-radius:22px;overflow:hidden;border:2px solid var(--navy)">
+      <div style="flex:1.1;background:var(--navy);color:white;padding:24px"><b>Instruções</b><p class="small" style="color:var(--on-dark-muted)">system prompt</p></div>
+      <div style="flex:1.5;background:var(--soft-violet);padding:24px"><b>Conversa</b><p class="small muted">mensagens anteriores</p></div>
+      <div style="flex:2.1;background:var(--soft-blue);padding:24px"><b>Arquivos</b><p class="small muted">código e documentos</p></div>
+      <div style="flex:1.2;background:var(--soft-cyan);padding:24px"><b>Ferramentas</b><p class="small muted">schemas e resultados</p></div>
+      <div style="flex:1.3;background:var(--soft-amber);padding:24px"><b>Saída</b><p class="small muted">resposta reservada</p></div>
+      </div>
+      <p class="small muted">Instruções, histórico, arquivos, ferramentas e a resposta dividem o mesmo orçamento. Contexto longo aumenta a capacidade, mas não substitui seleção de informação.</p>
+      <div class="callout">O harness decide <b>o que entra</b> na janela e <b>o que fica de fora</b>.</div>
+    </div>
+  </div>
+  <aside class="notes">O contexto inclui muito mais que a última pergunta: instruções, histórico, arquivos, definições de ferramentas e resultados. Alguns modelos também precisam reservar espaço para saída e raciocínio. Fonte: https://help.openai.com/en/articles/4936856-understanding-and-counting-tokens</aside>
+</section>
+
+<!-- ====================================================== 7. memória -->
+<section class="slide">
+  <div><p class="eyebrow">01 · Por dentro do LLM</p><h2>Contexto, memória e pesos</h2></div>
+  <table>
+    <tr><th></th><th>O que contém</th><th>Quanto dura</th><th>Quem controla</th></tr>
+    <tr><td>Janela de contexto</td><td>O material enviado para a execução atual</td><td>Até sair da janela ou terminar a sessão</td><td>Aplicação e harness</td></tr>
+    <tr><td>Memória do produto</td><td>Preferências, resumos ou fatos salvos fora do modelo</td><td>Entre conversas, conforme configuração</td><td>Produto e usuário</td></tr>
+    <tr><td>Pesos do modelo</td><td>Padrões aprendidos durante o treinamento</td><td>Até a próxima versão ou ajuste do modelo</td><td>Fornecedor ou equipe que treina</td></tr>
+  </table>
+  <div class="grid g2">
+    <div class="card t-coral"><span class="tag">equívoco comum</span><h3>“Ele leu o arquivo uma vez, então sempre lembrará.”</h3><p>O arquivo precisa permanecer no contexto ou ser recuperado novamente pelo harness.</p></div>
+    <div class="card t-green"><span class="tag">vibe coding</span><h3>Projetos longos precisam de memória externa</h3><p>Git, documentação, planos, testes e arquivos de instrução preservam o estado do trabalho.</p></div>
+  </div>
+  <aside class="notes">Este slide corrige um dos erros mais frequentes. A janela de contexto é temporária. A memória de um produto costuma ser um sistema externo que injeta informações novamente. Os pesos não mudam porque o usuário explicou algo em uma conversa comum.</aside>
+</section>
+
+<!-- ====================================================== 8. controles -->
+<section class="slide" style="gap:30px">
+  <div><p class="eyebrow">01 · Durante a geração</p><h2>Parâmetros que controlam uma execução</h2></div>
+  <div class="control-grid">
+    <div class="control-meter"><b>Temperatura</b><p>Controla o quanto a escolha do próximo token varia.</p><div class="control-track"><span></span></div></div>
+    <div class="control-meter"><b>Top-p</b><p>Reduz o conjunto de opções consideradas durante a amostragem.</p><div class="control-track"><span></span></div></div>
+    <div class="control-meter"><b>Limite de saída</b><p>Define o máximo de tokens da resposta.</p><div class="control-track"><span></span></div></div>
+    <div class="control-meter"><b>Esforço de raciocínio</b><p>Define quanto processamento o modelo dedica antes de responder.</p><div class="control-track"><span></span></div></div>
+  </div>
+  <div class="callout">Nem todo modelo expõe todos os controles. Produtos mais novos podem administrar alguns deles automaticamente.</div>
+  <aside class="notes">Evite ensinar temperatura como botão universal. Algumas famílias recentes não aceitam temperatura, top-p ou top-k fora do padrão. O conceito continua útil, mas a disponibilidade depende do modelo e do endpoint. Fontes: https://help.openai.com/en/articles/5072518-controlling-the-length-of-openai-model-responses e https://docs.anthropic.com/en/docs/about-claude/model-deprecations</aside>
+</section>
+
+<!-- ====================================================== 9. escolha do modelo -->
+<section class="slide">
+  <div><p class="eyebrow">01 · Escolha do modelo</p><h2>O que avaliar ao escolher um modelo</h2></div>
+  <div class="grid g3" style="flex:1">
+    <div class="card t-blue"><span class="tag">código</span><h3>Capacidade na tarefa</h3><p>Testes reais do seu projeto dizem mais que um ranking geral.</p></div>
+    <div class="card t-cyan"><span class="tag">contexto</span><h3>Quanto precisa caber</h3><p>Um arquivo pequeno e um monorepo exigem estratégias diferentes.</p></div>
+    <div class="card t-violet"><span class="tag">agente</span><h3>Uso de ferramentas</h3><p>Editar, executar, navegar e interpretar resultados são capacidades do modelo e do harness.</p></div>
+    <div class="card t-green"><span class="tag">tempo</span><h3>Latência</h3><p>Modelos rápidos favorecem ciclos curtos de experimentação.</p></div>
+    <div class="card t-amber"><span class="tag">consumo</span><h3>Custo total</h3><p>Considere entrada, saída, raciocínio, ferramentas e repetições.</p></div>
+    <div class="card t-coral"><span class="tag">empresa</span><h3>Privacidade e controle</h3><p>Contrato, retenção, região, identidade e auditoria podem decidir a escolha.</p></div>
+  </div>
+  <div class="callout">Para vibe coding, o melhor modelo é o que conclui a tarefa com qualidade dentro dos limites do projeto.</div>
+  <aside class="notes">Conectar com o próximo slide: depois de entender o modelo, explicaremos o que o harness acrescenta. O mesmo modelo pode aparecer em produtos diferentes, e produtos como Cursor e Copilot podem oferecer modelos de vários provedores.</aside>
+</section>
+
+<!-- ====================================================== 10. abertura Harness -->
+<section class="slide dark" style="flex-direction:row;align-items:center;gap:96px">
+  <div class="col grow" style="gap:30px">
+    <p class="eyebrow">02 · Harness</p>
+    <h1>Harness</h1>
+    <p class="lead" style="color:var(--white)">O que transforma um <em class="accent">LLM</em> em um agente</p>
+    <p class="muted">Agora que entendemos o modelo, vamos ver a camada que o conecta a dados, ferramentas, memória e permissões.</p>
+  </div>
+  <div class="col center" style="width:600px;gap:22px;padding:48px;border:3px dashed var(--cyan);border-radius:34px">
+    <p class="eyebrow" style="margin:0">harness</p>
+    <div class="row" style="gap:14px"><span class="pill">ferramentas</span><span class="pill">contexto</span></div>
+    <div style="background:linear-gradient(135deg,var(--cyan),var(--blue));border-radius:24px;padding:30px 80px;box-shadow:0 18px 50px #22c8dd44">
+      <b style="font-size:80px;color:var(--ink);letter-spacing:-.03em">LLM</b>
+    </div>
+    <div class="row" style="gap:14px"><span class="pill">memória</span><span class="pill">permissões</span></div>
+    <div class="row" style="gap:14px"><span class="pill">loop</span><span class="pill">logs</span></div>
+  </div>
+  <aside class="notes">Transição de seção: o LLM prevê tokens, mas não executa tarefas por si só. O harness entrega ferramentas, contexto e limites. A próxima tela mostra essa limitação de forma concreta.</aside>
+</section>
+
+<!-- ====================================================== 11. LLM puro -->
+<section class="slide">
+  <div><p class="eyebrow">02 · Limites do LLM</p><h2>LLM “puro”: texto entra, texto sai</h2></div>
   <div class="row" style="gap:48px;flex:1">
     <div class="col" style="width:880px;gap:18px">
       <pre><span class="file"># uma chamada direta ao modelo</span>{
@@ -224,7 +407,7 @@
 
 <!-- ====================================================== 4. conceito de harness -->
 <section class="slide">
-  <div><p class="eyebrow">02 · O conceito</p><h2>Harness: tudo em volta do modelo</h2></div>
+  <div><p class="eyebrow">03 · Harness</p><h2>Harness: tudo em volta do modelo</h2></div>
   <div class="row center" style="gap:80px">
     <p class="big-eq">Agente = LLM + <span>Harness</span></p>
   </div>
@@ -242,7 +425,7 @@
 
 <!-- ====================================================== 5. loop agêntico -->
 <section class="slide" style="gap:32px">
-  <div><p class="eyebrow">02 · O conceito</p><h2>O loop agêntico</h2></div>
+  <div><p class="eyebrow">03 · Harness</p><h2>O loop agêntico</h2></div>
   <div class="row center" style="gap:14px">
     <div class="box violet grow"><span class="lbl">1 · modelo</span><b style="font-size:28px">Lê o contexto e decide o próximo passo</b></div>
     <div class="arrow" style="min-width:70px">→</div>
@@ -265,7 +448,7 @@ mensagens = [system_prompt, pedido_do_usuario]
 
 <!-- ====================================================== 6. chat vs claude code -->
 <section class="slide">
-  <div><p class="eyebrow">02 · O conceito</p><h2>Mesmo modelo, harnesses diferentes</h2></div>
+  <div><p class="eyebrow">03 · Harness</p><h2>Mesmo modelo, harnesses diferentes</h2></div>
   <table>
     <tr><th style="width:20%"></th><th style="width:40%">Claude (chat no app / web)</th><th style="width:40%">Claude Code (terminal / IDE)</th></tr>
     <tr><td>Modelo</td><td class="same">Claude Opus / Sonnet</td><td class="same">o mesmo</td></tr>
@@ -281,7 +464,7 @@ mensagens = [system_prompt, pedido_do_usuario]
 
 <!-- ====================================================== 7. peças -->
 <section class="slide">
-  <div><p class="eyebrow">02 · As peças</p><h2>Do que um harness é feito</h2></div>
+  <div><p class="eyebrow">03 · Harness</p><h2>Do que um harness é feito</h2></div>
   <div class="grid g4">
     <div class="card t-violet"><span class="tag">contexto</span><h3>System prompt</h3><p>Quem é o agente, regras e conhecimento do domínio. Ex.: <code>CLAUDE.md</code>, <code>--append-system-prompt</code>.</p></div>
     <div class="card t-cyan"><span class="tag">ação</span><h3>Function tools</h3><p>Funções descritas por <b>nome + descrição + JSON Schema</b>. O modelo pede; o harness executa.</p></div>
@@ -297,7 +480,7 @@ mensagens = [system_prompt, pedido_do_usuario]
 
 <!-- ====================================================== 8. MCP -->
 <section class="slide">
-  <div><p class="eyebrow">02 · As peças</p><h2>MCP: o padrão para ferramentas</h2></div>
+  <div><p class="eyebrow">03 · Harness</p><h2>MCP: o padrão para ferramentas</h2></div>
   <div class="row center" style="gap:16px">
     <div class="box ink" style="width:520px"><span class="lbl">cliente MCP (o harness)</span><b>Claude Code</b><span class="lbl">ou Claude Desktop, IDEs, outros agentes</span></div>
     <div class="arrow grow"><small>JSON-RPC</small>⇄<small>stdio (subprocesso) ou HTTP</small></div>
@@ -314,14 +497,14 @@ mensagens = [system_prompt, pedido_do_usuario]
 
 <!-- ====================================================== 9. divisor app -->
 <section class="slide dark" style="justify-content:center;gap:36px">
-  <p class="eyebrow">03 · Nossa aplicação</p>
+  <p class="eyebrow">04 · Nossa aplicação</p>
   <h1 style="font-size:120px">Laboratório de<br>Deep Learning</h1>
   <aside class="notes">Transição: agora tudo que vimos fica concreto. A ordem importa: a aplicação existe e funciona sozinha; o harness é uma camada por cima.</aside>
 </section>
 
 <!-- ====================================================== 10. funcionalidades -->
 <section class="slide">
-  <div><p class="eyebrow">03 · Nossa aplicação</p><h2>Uma aplicação comum, que funciona sem IA</h2></div>
+  <div><p class="eyebrow">04 · Nossa aplicação</p><h2>Uma aplicação comum, que funciona sem IA</h2></div>
   <div class="grid g3" style="flex:1">
     <div class="card t-blue"><span class="tag">organização</span><h3>Projetos</h3><p>Agrupam bases, modelos e execuções de treino. Tudo persistido em SQLite.</p></div>
     <div class="card t-cyan"><span class="tag">dados</span><h3>Bases</h3><p>18 embutidas (AND, XOR, moons, iris, digits, MNIST, séries…), upload de CSV/Excel/Parquet/NPZ e busca no Kaggle.</p></div>
@@ -336,7 +519,7 @@ mensagens = [system_prompt, pedido_do_usuario]
 
 <!-- ====================================================== 11. arquitetura -->
 <section class="slide">
-  <div><p class="eyebrow">03 · Nossa aplicação</p><h2>Humano e agente usam a mesma API</h2></div>
+  <div><p class="eyebrow">04 · Nossa aplicação</p><h2>Humano e agente usam a mesma API</h2></div>
   <div class="row center" style="gap:0">
     <div class="box blue" style="width:300px"><span class="lbl">humano clica</span><b>React UI</b><span class="mono small muted">:5173</span></div>
     <div class="arrow" style="min-width:150px"><small>REST</small>→</div>
@@ -355,7 +538,7 @@ mensagens = [system_prompt, pedido_do_usuario]
 
 <!-- ====================================================== 12. API de treino -->
 <section class="slide">
-  <div><p class="eyebrow">03 · Nível API</p><h2>A função de treino, sem agente</h2></div>
+  <div><p class="eyebrow">04 · Nível API</p><h2>A função de treino, sem agente</h2></div>
   <div class="row" style="gap:44px">
     <div class="col" style="width:900px;gap:20px">
       <pre><span class="file">backend/app/main.py</span><span class="d">@app.post</span>(<span class="s">"/api/runs"</span>)
@@ -385,7 +568,7 @@ mensagens = [system_prompt, pedido_do_usuario]
 
 <!-- ====================================================== 13. ferramenta MCP -->
 <section class="slide">
-  <div><p class="eyebrow">03 · Nível MCP</p><h2>A mesma função como ferramenta MCP</h2></div>
+  <div><p class="eyebrow">04 · Nível MCP</p><h2>A mesma função como ferramenta MCP</h2></div>
   <div class="row" style="gap:40px">
     <pre style="width:1090px;font-size:22.5px"><span class="file">backend/mcp_server/server.py (resumido)</span><span class="d hl">@mcp.tool()</span>
 <span class="k">async def</span> <span class="f hl">train_model</span>(<span class="hl">model_id: int, dataset_id: int,</span>
@@ -413,7 +596,7 @@ mensagens = [system_prompt, pedido_do_usuario]
 
 <!-- ====================================================== 14. o que o agente vê -->
 <section class="slide">
-  <div><p class="eyebrow">03 · Nível MCP</p><h2>O que o agente enxerga</h2></div>
+  <div><p class="eyebrow">04 · Nível MCP</p><h2>O que o agente enxerga</h2></div>
   <div class="row" style="gap:44px">
     <pre style="width:1020px;font-size:22.5px"><span class="file">definição enviada ao modelo (simplificada)</span>{
   <span class="s">"name"</span>: <span class="s">"mcp__dl-lab__train_model"</span>,
@@ -446,7 +629,7 @@ mensagens = [system_prompt, pedido_do_usuario]
 
 <!-- ====================================================== 15. fluxo -->
 <section class="slide">
-  <div><p class="eyebrow">03 · Nível MCP</p><h2>Uma chamada, passo a passo</h2></div>
+  <div><p class="eyebrow">04 · Nível MCP</p><h2>Uma chamada, passo a passo</h2></div>
   <div class="steps">
     <div class="step"><span class="num">1</span><span class="who">Usuário</span><span class="what">“Treine um MLP no XOR com 300 épocas.”</span></div>
     <div class="step agent"><span class="num">2</span><span class="who">Modelo</span><span class="what">tool_use → get_project(1) <span class="c" style="font-family:var(--sans)">(descobre os ids)</span></span></div>
@@ -461,7 +644,7 @@ mensagens = [system_prompt, pedido_do_usuario]
 
 <!-- ====================================================== 16. nosso harness -->
 <section class="slide dark" style="gap:30px">
-  <div><p class="eyebrow">03 · Nosso harness</p><h2>O harness inteiro em um comando</h2></div>
+  <div><p class="eyebrow">04 · Nosso harness</p><h2>O harness inteiro em um comando</h2></div>
   <pre style="font-size:22px;padding:24px 36px"><span class="c"># backend/app/chat.py</span>
 <span class="f">claude</span> -p --output-format stream-json --verbose --include-partial-messages \
        --mcp-config data/mcp_config.json --strict-mcp-config \
@@ -481,7 +664,7 @@ mensagens = [system_prompt, pedido_do_usuario]
 
 <!-- ====================================================== 17. hands-on -->
 <section class="slide">
-  <div><p class="eyebrow">04 · Mão na massa</p><h2>Hands-on: do clique ao agente</h2></div>
+  <div><p class="eyebrow">05 · Mão na massa</p><h2>Hands-on: do clique ao agente</h2></div>
   <div class="grid g4" style="flex:1">
     <div class="card t-blue"><span class="tag">1 · sem agente · 10 min</span><h3>Pela interface</h3><p>Feche o chat. Crie o projeto “Aula Harness”, adicione <code>and_gate</code> e <code>xor_gate</code>, treine um Perceptron em cada um e compare as fronteiras de decisão.</p></div>
     <div class="card t-violet"><span class="tag">2 · com agente · 10 min</span><h3>Pelo chat</h3><p>Peça: <i>“Mostre que o perceptron resolve AND mas não XOR; depois treine um MLP com 4 neurônios tanh no XOR.”</i> Veja a tela atualizar sozinha.</p></div>
@@ -494,7 +677,7 @@ mensagens = [system_prompt, pedido_do_usuario]
 
 <!-- ====================================================== 18. experimentos -->
 <section class="slide">
-  <div><p class="eyebrow">04 · Mão na massa</p><h2>Experimentos: mude o harness, não o modelo</h2></div>
+  <div><p class="eyebrow">05 · Mão na massa</p><h2>Experimentos: mude o harness, não o modelo</h2></div>
   <div class="col" style="gap:16px">
     <div class="step" style="grid-template-columns:64px 380px 1fr"><span class="num">A</span><span class="who">Piore a docstring</span><span class="small">Apague a explicação de <code>optimizer</code> e de <code>wait_seconds</code> em <code>train_model</code>. O agente ainda usa valores válidos? Espera o treino terminar?</span></div>
     <div class="step" style="grid-template-columns:64px 380px 1fr"><span class="num">B</span><span class="who">Remova uma ferramenta</span><span class="small">Comente <code>compare_runs</code> no <code>server.py</code>. Como o agente compara treinos agora? E quantas chamadas a mais ele faz?</span></div>
