@@ -24,22 +24,30 @@ PROVIDERS = {
 
 
 async def mcp_status() -> dict:
-    """Diagnóstico seguro do subprocesso MCP, sem chamar modelo nem usar credencial."""
+    """Diagnóstico seguro do subprocesso MCP, sem chamar modelo nem usar credencial.
+
+    Além da inicialização, executa uma leitura real pelo gateway do Harness. Isso
+    confirma que o subprocesso consegue voltar ao servidor no contêiner.
+    """
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
     server = Path(__file__).resolve().parent.parent / "mcp_server" / "server.py"
-    params = StdioServerParameters(command=sys.executable, args=[str(server)], env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+    run = H.create("consult")
+    params = StdioServerParameters(command=sys.executable, args=[str(server)], env={**os.environ, "PYTHONIOENCODING": "utf-8", "DL_LAB_AGENT_TOKEN": run.token})
     try:
         async with stdio_client(params) as (reader, writer):
             async with ClientSession(reader, writer) as session:
                 async with asyncio.timeout(20):
                     await session.initialize()
                     tools = (await session.list_tools()).tools
-                return {"ok": True, "tools": len(tools)}
+                    probe = await session.call_tool("list_projects", {})
+                return {"ok": not bool(probe.is_error), "tools": len(tools), "gateway": "ok" if not probe.is_error else "erro"}
     except TimeoutError:
         return {"ok": False, "detail": "O subprocesso MCP não respondeu em 20 segundos."}
     except Exception:
         return {"ok": False, "detail": "O subprocesso MCP não iniciou corretamente."}
+    finally:
+        H.close(run)
 
 
 def public_mode() -> bool:
