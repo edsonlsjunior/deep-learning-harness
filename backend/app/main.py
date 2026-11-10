@@ -13,15 +13,16 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from . import architectures as A
 from . import chat, db, files, kaggle, training, providers, codex_chat, copilot_chat, harness as H
 from . import datasets as D
+from .session_credentials import COOKIE_NAME, SUPPORTED_PROVIDERS, TTL_SECONDS, store as session_credentials
 
 app = FastAPI(title="DL Lab API", version="1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -41,6 +42,39 @@ def _404(obj: Any, what: str):
     if not obj:
         raise HTTPException(404, f"{what} não encontrado")
     return obj
+
+
+def _request_uses_https(request: Request) -> bool:
+    forwarded = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    return request.url.scheme == "https" or forwarded == "https"
+
+
+def _secure_cookie(request: Request) -> bool:
+    """Em produção HTTPS é obrigatório; HTTP local continua funcional para a aula."""
+    configured = os.environ.get("DL_LAB_COOKIE_SECURE", "").lower()
+    return configured in {"1", "true", "yes"} if configured else _request_uses_https(request)
+
+
+def _session_id(request: Request, response: Response) -> str:
+    session_id = request.cookies.get(COOKIE_NAME)
+    if not session_id:
+        session_id = session_credentials.new_session_id()
+        response.set_cookie(
+            key=COOKIE_NAME,
+            value=session_id,
+            max_age=TTL_SECONDS,
+            httponly=True,
+            secure=_secure_cookie(request),
+            samesite="strict",
+            path="/",
+        )
+    response.headers["Cache-Control"] = "no-store"
+    return session_id
+
+
+def _session_provider_keys(request: Request) -> dict[str, str]:
+    key = session_credentials.get(request.cookies.get(COOKIE_NAME), "openai")
+    return {"openai": key} if key else {}
 
 
 # ------------------------------------------------------------------ schemas
@@ -84,6 +118,11 @@ class ChatIn(BaseModel):
     provider: str = "claude-code"
     history: list[dict[str, str]] = Field(default_factory=list, max_length=30)
     policy: H.Policy = "operate"
+
+
+class SessionCredentialIn(BaseModel):
+    # SecretStr evita revelar o valor caso uma validação seja registrada por engano.
+    api_key: SecretStr
 
 
 class AgentCall(BaseModel):
@@ -323,7 +362,7 @@ def harness():
 
 
 @app.post("/api/chat")
-def chat_endpoint(body: ChatIn):
+def chat_endpoint(body: ChatIn, request: Request):
     project = db.one("SELECT * FROM projects WHERE id = ?", (body.project_id,)) if body.project_id else None
     run = H.create(body.policy)
     if body.provider == "codex":
@@ -331,7 +370,9 @@ def chat_endpoint(body: ChatIn):
     elif body.provider == "copilot":
         source = copilot_chat.stream_chat(body.message, body.session_id, body.model, project, agent_token=run.token, policy=body.policy)
     elif body.provider != "claude-code":
-        source = providers.stream_chat(body.message, body.provider, body.model, project, body.history, agent_token=run.token, policy=body.policy)
+        # A chave não veio no corpo do chat: só é obtida da memória da sessão.
+        api_key = _session_provider_keys(request).get(body.provider)
+        source = providers.stream_chat(body.message, body.provider, body.model, project, body.history, agent_token=run.token, policy=body.policy, api_key=api_key)
     else:
         source = chat.stream_chat(body.message, body.session_id, project, body.model, agent_token=run.token, policy=body.policy)
     return StreamingResponse(H.stream(run, source, chat.SYSTEM_PROMPT),
@@ -340,8 +381,41 @@ def chat_endpoint(body: ChatIn):
 
 
 @app.get("/api/providers")
-async def list_providers():
-    return [await codex_chat.status() if p["id"] == "codex" else p for p in providers.catalog()]
+async def list_providers(request: Request, response: Response):
+    session_id = _session_id(request, response)
+    configured = {p for p in SUPPORTED_PROVIDERS if session_credentials.configured(session_id, p)}
+    return [await codex_chat.status() if p["id"] == "codex" else p for p in providers.catalog(configured)]
+
+
+@app.get("/api/session/credentials")
+def credential_status(request: Request, response: Response):
+    """Devolve somente estado e prazo; nunca o valor de uma chave."""
+    session_id = _session_id(request, response)
+    return {"providers": {provider: {
+        "configured": session_credentials.configured(session_id, provider),
+        "expires_in_seconds": session_credentials.expires_in(session_id, provider),
+    } for provider in SUPPORTED_PROVIDERS}}
+
+
+@app.post("/api/session/credentials/{provider}")
+def save_credential(provider: str, body: SessionCredentialIn, request: Request, response: Response):
+    if provider not in SUPPORTED_PROVIDERS:
+        raise HTTPException(404, "Provedor não suporta chave por sessão.")
+    if providers.public_mode() and not _request_uses_https(request):
+        raise HTTPException(400, "A página pública exige HTTPS para receber uma chave de API.")
+    session_id = _session_id(request, response)
+    # O segredo é entregue diretamente ao cofre em memória e não é incluído na resposta.
+    session_credentials.set(session_id, provider, body.api_key.get_secret_value())
+    return {"provider": provider, "configured": True, "expires_in_seconds": TTL_SECONDS}
+
+
+@app.delete("/api/session/credentials/{provider}")
+def remove_credential(provider: str, request: Request, response: Response):
+    if provider not in SUPPORTED_PROVIDERS:
+        raise HTTPException(404, "Provedor não suporta chave por sessão.")
+    session_id = _session_id(request, response)
+    session_credentials.remove(session_id, provider)
+    return {"provider": provider, "configured": False}
 
 
 @app.post("/api/harness/execute")
@@ -371,8 +445,9 @@ async def agent_approve(run_id: str, approval_id: str, body: ApprovalIn):
 
 
 @app.post("/api/providers/detect")
-async def detect_providers():
-    return await providers.detect()
+async def detect_providers(request: Request, response: Response):
+    _session_id(request, response)
+    return await providers.detect(_session_provider_keys(request))
 
 
 # Launcher serves the built React UI from the same origin as the API.

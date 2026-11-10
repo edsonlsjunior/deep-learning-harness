@@ -108,8 +108,16 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict("os.environ", {}, clear=True):
             frames = [json.loads(f[6:]) async for f in providers.stream_chat("oi", "openai", None, None, [])]
         self.assertEqual(frames[0]["type"], "error")
-        self.assertIn("OPENAI_API_KEY", frames[0]["message"])
+        self.assertIn("chave de API", frames[0]["message"])
         self.assertEqual(frames[-1]["type"], "done")
+
+    async def test_runtime_key_is_used_without_environment_variable(self):
+        Client.requests = []
+        Client.replies = [{"role": "assistant", "content": "ok"}]
+        with patch.dict("sys.modules", {"app.chat": SimpleNamespace(SYSTEM_PROMPT="Laboratório")}), patch("mcp.ClientSession", Session), patch("mcp.client.stdio.stdio_client", stdio), patch.object(providers.httpx, "AsyncClient", Client), patch.dict("os.environ", {}, clear=True):
+            events = [e async for e in providers.agent_events("oi", "openai", "test-model", None, [], api_key="session-only-key")]
+        self.assertEqual(events[-1]["type"], "result")
+        self.assertEqual(Client.requests[0][1]["headers"], {"Authorization": "Bearer session-only-key"})
 
     async def test_history_filters_system_injection(self):
         Client.requests = []

@@ -23,16 +23,24 @@ PROVIDERS = {
 }
 
 
-def catalog():
-    return [{"id": "codex", "name": "Codex — assinatura ChatGPT", "configured": False, "default_model": ""}, {"id": "claude-code", "name": "Claude Code", "configured": bool(__import__("shutil").which("claude")), "default_model": ""}, {"id": "copilot", "name": "GitHub Copilot CLI", "configured": bool(copilot_chat.executable()), "default_model": ""}] + [
+def public_mode() -> bool:
+    """Hospedagem pública nunca usa logins/variáveis do operador do servidor."""
+    return os.environ.get("DL_LAB_PUBLIC_MODE", "").lower() in {"1", "true", "yes"}
+
+
+def catalog(session_providers: set[str] | frozenset[str] = frozenset()):
+    cli = [] if public_mode() else [{"id": "codex", "name": "Codex — assinatura ChatGPT", "configured": False, "default_model": ""}, {"id": "claude-code", "name": "Claude Code", "configured": bool(__import__("shutil").which("claude")), "default_model": ""}, {"id": "copilot", "name": "GitHub Copilot CLI", "configured": bool(copilot_chat.executable()), "default_model": ""}]
+    provider_ids = ("openai",) if public_mode() else PROVIDERS
+    return cli + [
         {"id": key, "name": {"openai": "OpenAI API", "gemini": "Gemini API", "local": "Local (Ollama)"}[key],
-         "configured": not env or bool(os.environ.get(env)), "default_model": model}
-        for key, (_, env, model) in PROVIDERS.items()
+         "configured": key in session_providers or (not public_mode() and (not env or bool(os.environ.get(env)))), "default_model": model}
+        for key in provider_ids for _, env, model in [PROVIDERS[key]]
     ]
 
 
-async def detect():
+async def detect(session_credentials: dict[str, str] | None = None):
     """Check configured catalogs without generating text or returning credentials."""
+    session_credentials = session_credentials or {}
     async def probe(item):
         item = {**item, "models": [], "available": False}
         if item["id"] == "codex":
@@ -43,12 +51,13 @@ async def detect():
             item["status"] = "CLI instalado; login não verificado" if item["configured"] else "CLI não instalado"
             return item
         base, env, _ = PROVIDERS[item["id"]]
-        if env and not os.environ.get(env):
+        key = session_credentials.get(item["id"]) or ("" if public_mode() else (os.environ.get(env, "") if env else "local"))
+        if env and not key:
             item["status"] = "Chave de API não configurada"
             return item
         if item["id"] == "local":
             base = os.environ.get("LOCAL_LLM_BASE_URL", base)
-        headers = {"Authorization": f"Bearer {os.environ[env]}"} if env else {}
+        headers = {"Authorization": f"Bearer {key}"} if env else {}
         try:
             async with httpx.AsyncClient(timeout=5, follow_redirects=False) as client:
                 response = await client.get(base.rstrip("/") + "/models", headers=headers)
@@ -62,10 +71,10 @@ async def detect():
         except (httpx.HTTPError, ValueError, TypeError, AttributeError):
             item["status"] = "Serviço indisponível ou resposta inválida"
         return item
-    return await asyncio.gather(*(probe(p) for p in catalog()))
+    return await asyncio.gather(*(probe(p) for p in catalog(set(session_credentials))))
 
 
-async def agent_events(message, provider, model, project, history, agent_token=None, policy="consult"):
+async def agent_events(message, provider, model, project, history, agent_token=None, policy="consult", api_key=None):
     started = time.monotonic()
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
@@ -74,9 +83,9 @@ async def agent_events(message, provider, model, project, history, agent_token=N
     if provider not in PROVIDERS:
         raise ValueError("Provedor desconhecido")
     base, env, default = PROVIDERS[provider]
-    key = os.environ.get(env, "") if env else "local"
+    key = api_key or ("" if public_mode() else (os.environ.get(env, "") if env else "local"))
     if not key:
-        raise ValueError(f"Configure {env} no ambiente do backend e reinicie o servidor.")
+        raise ValueError("Conecte sua chave de API nesta sessão para usar este provedor.")
     model = model or default
     if not model:
         raise ValueError("Informe o nome do modelo instalado no servidor local.")
@@ -128,9 +137,9 @@ async def agent_events(message, provider, model, project, history, agent_token=N
                 raise ValueError("Limite de 20 rodadas atingido. Consulte o projeto antes de repetir ações.")
 
 
-async def stream_chat(message, provider, model, project, history, agent_token=None, policy="consult"):
+async def stream_chat(message, provider, model, project, history, agent_token=None, policy="consult", api_key=None):
     try:
-        async for event in agent_events(message, provider, model, project, history, agent_token, policy):
+        async for event in agent_events(message, provider, model, project, history, agent_token, policy, api_key):
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
     except asyncio.CancelledError:
         raise

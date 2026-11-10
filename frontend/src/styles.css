@@ -178,6 +178,14 @@ pre.json { background: var(--paper); border: 1px solid var(--line); border-radiu
 .chat-head h3 { margin: 4px 0 0; font-size: 1.05rem; letter-spacing: -.02em; color: #fff; }
 .provider-main { display: grid; gap: 5px; margin-top: 12px; color: #91a5bb; font: 800 .62rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .provider-main select { width: 100%; background: var(--navy); border: 1px solid var(--navy-3); color: #fff; border-radius: 9px; padding: 9px 10px; font-size: .8rem; text-transform: none; letter-spacing: 0; }
+.credential-card { margin-top: 10px; padding: 10px; border: 1px solid #28556d; border-radius: 9px; background: rgba(18, 51, 73, .48); color: #dcecff; }
+.credential-card b { display: block; font-size: .78rem; }
+.credential-card p { margin: 4px 0 0; color: #a8c0d4; font-size: .69rem; line-height: 1.35; }
+.credential-form, .credential-connected { display: flex; gap: 7px; align-items: center; margin-top: 8px; }
+.credential-form input { min-width: 0; flex: 1; padding: 7px 8px; border: 1px solid var(--navy-3); border-radius: 7px; background: var(--navy); color: #fff; font-size: .75rem; }
+.credential-connected { justify-content: space-between; color: #78d5aa; font-size: .72rem; font-weight: 700; }
+.credential-card .credential-error { color: #ffb9ad; }
+.credential-card .credential-note { color: #91a5bb; }
 .chat-tabs { display: flex; gap: 4px; margin-top: 10px; }
 .chat-tabs button { border: 1px solid var(--line-dark); background: #ffffff08; color: #b6c3d2; border-radius: 99px; padding: 4px 11px; font: 800 .6rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .chat-tabs button.active { border-color: var(--cyan); color: var(--cyan); }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import { DATA_ACCEPT, api, streamChat } from "../api";
 import type { ChatEvent, FileInfo, KaggleDataset, Project } from "../types";
@@ -64,6 +64,10 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
   const [detecting, setDetecting] = useState(false);
   const [detected, setDetected] = useState<Awaited<ReturnType<typeof api.detectProviders>>>([]);
   const [detectError, setDetectError] = useState("");
+  const [openaiKey, setOpenaiKey] = useState("");
+  const [credentialConfigured, setCredentialConfigured] = useState(false);
+  const [credentialBusy, setCredentialBusy] = useState(false);
+  const [credentialError, setCredentialError] = useState("");
   async function detectProviders() {
     setDetecting(true); setDetectError("");
     try {
@@ -76,7 +80,17 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
     // Remove conversas gravadas por versões anteriores. Projetos e treinos ficam no backend.
     localStorage.removeItem("dl.msgs");
     localStorage.removeItem("dl.session");
-    api.providers().then(setProviders).catch(() => {});
+    async function loadProviderState() {
+      try {
+        // A primeira chamada cria o cookie HttpOnly; a segunda só devolve estado, nunca a chave.
+        setProviders(await api.providers());
+        const state = await api.sessionCredentials();
+        setCredentialConfigured(!!state.providers.openai?.configured);
+      } catch {
+        // A interface continua funcional para os provedores locais mesmo se a API estiver iniciando.
+      }
+    }
+    loadProviderState();
   }, []);
   useEffect(() => { localStorage.setItem("dl.provider", provider); }, [provider]);
   const [events, setEvents] = useState<ChatEvent[]>([]);
@@ -94,6 +108,38 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
   // o stream vive por vários renders: guardamos sempre o callback mais recente
   const onToolResultRef = useRef(onToolResult);
   onToolResultRef.current = onToolResult;
+
+  async function connectOpenAI(event: FormEvent) {
+    event.preventDefault();
+    if (!openaiKey.trim() || credentialBusy) return;
+    setCredentialBusy(true);
+    setCredentialError("");
+    try {
+      await api.saveSessionCredential("openai", openaiKey);
+      setOpenaiKey(""); // Não deixa o segredo na memória do formulário após o envio.
+      setCredentialConfigured(true);
+      setProviders(await api.providers());
+    } catch (e: any) {
+      setOpenaiKey("");
+      setCredentialError(e.message || "Não foi possível conectar a chave.");
+    } finally {
+      setCredentialBusy(false);
+    }
+  }
+
+  async function disconnectOpenAI() {
+    setCredentialBusy(true);
+    setCredentialError("");
+    try {
+      await api.removeSessionCredential("openai");
+      setCredentialConfigured(false);
+      setProviders(await api.providers());
+    } catch (e: any) {
+      setCredentialError(e.message || "Não foi possível remover a chave.");
+    } finally {
+      setCredentialBusy(false);
+    }
+  }
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
@@ -248,6 +294,36 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
             {providers.map(p => <option key={p.id} value={p.id}>{p.name}{p.configured ? "" : " (configurar)"}</option>)}
           </select>
         </label>
+        {provider === "openai" && (
+          <div className="credential-card">
+            <div>
+              <b>Chave pessoal da OpenAI</b>
+              <p>Usada só nesta sessão do navegador. Não é gravada no projeto, no computador, nos logs ou no GitHub.</p>
+            </div>
+            {credentialConfigured ? (
+              <div className="credential-connected">
+                <span>● Conectada nesta sessão</span>
+                <button className="btn dark-ghost sm" type="button" onClick={disconnectOpenAI} disabled={credentialBusy}>Remover</button>
+              </div>
+            ) : (
+              <form className="credential-form" onSubmit={connectOpenAI}>
+                <input
+                  aria-label="Chave da API OpenAI"
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={openaiKey}
+                  disabled={credentialBusy || busy}
+                  onChange={(e) => setOpenaiKey(e.target.value)}
+                  placeholder="Cole sua chave de API"
+                />
+                <button className="btn primary sm" type="submit" disabled={!openaiKey.trim() || credentialBusy || busy}>{credentialBusy ? "Conectando…" : "Conectar"}</button>
+              </form>
+            )}
+            {credentialError && <p className="small credential-error" role="status">{credentialError}</p>}
+            {!credentialConfigured && <p className="small credential-note">A assinatura ChatGPT/Codex e a API são serviços distintos; use uma chave criada na Plataforma OpenAI.</p>}
+          </div>
+        )}
         <div className="chat-tabs">
           <button className={view === "chat" ? "active" : ""} onClick={() => setView("chat")}>
             Chat

@@ -118,6 +118,24 @@ Claude Code exige seu próprio CLI instalado e logado. OpenAI API/Gemini API usa
 configure `LOCAL_LLM_BASE_URL` (padrão `http://127.0.0.1:11434/v1`) e informe um
 modelo com suporte a ferramentas. A detecção consulta os catálogos sem gerar
 texto; catálogo acessível não garante suporte a ferramentas em todos os modelos.
+
+### Chave própria em uma página pública (OpenAI)
+
+No provedor **OpenAI API**, cada pessoa pode colar a própria chave no campo da
+interface. A chave é enviada ao backend e fica apenas na memória do processo,
+associada a um cookie anônimo `HttpOnly`, por até 30 minutos (ou até clicar em
+**Remover**). Ela não é escrita no banco, em arquivo, em `localStorage`, nos
+logs ou no repositório; reiniciar o servidor também a elimina. A resposta da API
+só informa se existe uma chave conectada — nunca devolve seu valor.
+
+Para publicar, defina `DL_LAB_PUBLIC_MODE=1` e `DL_LAB_COOKIE_SECURE=1`. Nesse
+modo, a aplicação não oferece CLIs nem usa `OPENAI_API_KEY` do operador do
+servidor: somente a chave temporária de quem está usando a página. Sirva sempre
+por HTTPS e não inclua nenhuma chave em variáveis públicas do frontend.
+
+Uma assinatura ChatGPT/Codex não cria automaticamente crédito de API: a pessoa
+deve gerar uma chave de projeto na Plataforma OpenAI e controlar limites e
+gastos na própria conta.
 Não versione credenciais. Cada instalação usa o login do seu próprio usuário.
 
 ### Desenvolvimento
