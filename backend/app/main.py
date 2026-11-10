@@ -450,6 +450,12 @@ def harness():
     return chat.describe_harness()
 
 
+@app.get("/api/harness/status")
+async def harness_status():
+    """Diagnóstico sem modelos ou credenciais para a tela e suporte técnico."""
+    return await providers.mcp_status()
+
+
 @app.post("/api/chat")
 def chat_endpoint(body: ChatIn, request: Request):
     owner = _owner_session(request)

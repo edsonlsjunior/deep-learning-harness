@@ -23,6 +23,25 @@ PROVIDERS = {
 }
 
 
+async def mcp_status() -> dict:
+    """Diagnóstico seguro do subprocesso MCP, sem chamar modelo nem usar credencial."""
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+    server = Path(__file__).resolve().parent.parent / "mcp_server" / "server.py"
+    params = StdioServerParameters(command=sys.executable, args=[str(server)], env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+    try:
+        async with stdio_client(params) as (reader, writer):
+            async with ClientSession(reader, writer) as session:
+                async with asyncio.timeout(20):
+                    await session.initialize()
+                    tools = (await session.list_tools()).tools
+                return {"ok": True, "tools": len(tools)}
+    except TimeoutError:
+        return {"ok": False, "detail": "O subprocesso MCP não respondeu em 20 segundos."}
+    except Exception:
+        return {"ok": False, "detail": "O subprocesso MCP não iniciou corretamente."}
+
+
 def public_mode() -> bool:
     """Hospedagem pública nunca usa logins/variáveis do operador do servidor."""
     return os.environ.get("DL_LAB_PUBLIC_MODE", "").lower() in {"1", "true", "yes"}
@@ -108,8 +127,12 @@ async def agent_events(message, provider, model, project, history, agent_token=N
     params = StdioServerParameters(command=sys.executable, args=[str(server)], env=env)
     async with stdio_client(params) as (reader, writer):
         async with ClientSession(reader, writer) as session:
-            await session.initialize()
-            available = (await session.list_tools()).tools
+            try:
+                async with asyncio.timeout(20):
+                    await session.initialize()
+                    available = (await session.list_tools()).tools
+            except TimeoutError as exc:
+                raise ValueError("O Harness interno não respondeu em 20 segundos. Tente novamente em instantes.") from exc
             tools = [{"type": "function", "function": {"name": t.name, "description": t.description or "", "parameters": t.input_schema}} for t in available]
             names = {t.name for t in available}
             yield {"type": "init", "session_id": "", "model": model, "tools": sorted(names), "mcp_servers": [{"name": "dl-lab", "status": "connected"}]}
