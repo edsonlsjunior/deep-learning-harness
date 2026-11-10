@@ -212,10 +212,57 @@ def _seq_parity(params: dict):
     return X, y, {"task": "sequence_classification", "class_names": ["par", "ímpar"]}
 
 
+def _next_word(params: dict):
+    """Corpus pequeno para demonstrar previsão da próxima palavra, sem download.
+
+    Cada palavra de contexto vira um vetor one-hot. Isso deixa visível a etapa de
+    tokenização/representação antes da RNN ou LSTM, sem depender de embeddings ou
+    de uma API de LLM. O objetivo é pedagógico, não produzir texto livre.
+    """
+    window = max(1, min(int(params.get("window", 3)), 6))
+    repeat = max(1, min(int(params.get("repeat", 30)), 200))
+    phrases = [
+        ["o", "modelo", "prevê", "a", "próxima", "palavra"],
+        ["a", "rede", "prevê", "a", "próxima", "palavra"],
+        ["uma", "rnn", "lê", "uma", "palavra", "por", "vez"],
+        ["uma", "lstm", "lembra", "palavras", "por", "mais", "tempo"],
+        ["redes", "neurais", "aprendem", "com", "dados"],
+        ["modelos", "profundos", "aprendem", "com", "dados"],
+        ["texto", "forma", "uma", "sequência", "de", "palavras"],
+    ]
+    vocabulary = sorted({word for phrase in phrases for word in phrase})
+    output_words = sorted({word for phrase in phrases for word in phrase[1:]})
+    word_index = {word: i for i, word in enumerate(vocabulary)}
+    target_index = {word: i for i, word in enumerate(output_words)}
+    pad_index = len(vocabulary)
+    samples, targets = [], []
+    for phrase in phrases:
+        for position in range(1, len(phrase)):
+            context = phrase[max(0, position - window):position]
+            padded = [None] * (window - len(context)) + context
+            encoded = np.zeros((window, len(vocabulary) + 1), dtype=np.float32)
+            for timestep, word in enumerate(padded):
+                encoded[timestep, pad_index if word is None else word_index[word]] = 1.0
+            samples.append(encoded)
+            targets.append(target_index[phrase[position]])
+    X = np.repeat(np.stack(samples), repeat, axis=0)
+    y = np.repeat(np.asarray(targets, dtype=np.int64), repeat)
+    return X, y, {
+        "task": "sequence_classification",
+        "class_names": output_words,
+        "word_prediction": {
+            "vocabulary": vocabulary,
+            "window": window,
+            "examples": ["o modelo prevê", "a rede prevê", "redes neurais aprendem"],
+        },
+        "note": "Corpus didático local: prever uma próxima palavra a partir das palavras anteriores.",
+    }
+
+
 BUILTIN: dict[str, dict[str, Any]] = {
     "and_gate": {"gen": _logic("and"), "aula": 1, "desc": "Porta lógica AND (4 pontos). Linearmente separável — Perceptron/Adaline."},
     "or_gate": {"gen": _logic("or"), "aula": 1, "desc": "Porta lógica OR (4 pontos). Linearmente separável."},
-    "xor_gate": {"gen": _logic("xor"), "aula": 1, "desc": "Porta lógica XOR. NÃO linearmente separável — motiva o MLP. Params: repeat, noise."},
+    "xor_gate": {"gen": _logic("xor"), "aula": 1, "desc": "Porta lógica XOR (4 pontos por padrão). NÃO linearmente separável — motiva o MLP. Params: repeat (padrão 1), noise (padrão 0)."},
     "blobs": {"gen": _blobs, "aula": 1, "desc": "Nuvens gaussianas 2D. Params: n_samples, centers, std."},
     "moons": {"gen": _moons, "aula": 1, "desc": "Duas luas entrelaçadas (não linear). Params: n_samples, noise."},
     "circles": {"gen": _circles, "aula": 1, "desc": "Círculos concêntricos (não linear). Params: n_samples, noise, factor."},
@@ -231,6 +278,7 @@ BUILTIN: dict[str, dict[str, Any]] = {
     "airline_passengers": {"gen": _airline, "aula": 3, "desc": "Série real de passageiros aéreos (1949-1960), janelas de 12 meses."},
     "daily_min_temperatures": {"gen": _daily_min_temp, "aula": 3, "desc": "Histórico climático real: temperatura mínima diária em Melbourne (1981-1990, 3650 dias). Prever a temperatura de amanhã a partir dos últimos dias (download ~70 KB na 1ª vez). Params: window (padrão 30), horizon (padrão 1)."},
     "sequence_parity": {"gen": _seq_parity, "aula": 3, "desc": "Paridade de sequências de bits (memória longa). Params: n_samples, length."},
+    "next_word": {"gen": _next_word, "aula": 3, "desc": "Previsão da próxima palavra com corpus didático local. Para RNN, LSTM e GRU. Params: window (padrão 3), repeat (padrão 30)."},
 }
 
 

@@ -4,11 +4,13 @@ import { DATA_ACCEPT, api, streamChat } from "../api";
 import type { ChatEvent, FileInfo, KaggleDataset, Project } from "../types";
 import PolicyPanel, { Approvals, MODES, DESCRIPTIONS } from "./PolicyPanel";
 
-type Part = { kind: "text"; text: string } | { kind: "tool"; id: string; name: string; input: unknown; result?: string; isError?: boolean };
+type ExecutionStatus = "running" | "completed" | "error" | "cancelled";
+type Part = { kind: "text"; text: string } | { kind: "tool"; id: string; name: string; input: unknown; result?: string; isError?: boolean; status: ExecutionStatus };
 interface Msg {
   role: "user" | "assistant";
   parts: Part[];
   footer?: string;
+  status?: ExecutionStatus;
   attachment?: { filename: string; summary: string };
 }
 
@@ -34,15 +36,14 @@ function attachmentLabel(f: FileInfo) {
     : `${f.n_rows} linhas × ${f.n_columns} colunas`;
 }
 
-const SUGGESTIONS = [
-  "Crie um modelo CNN para detectar os algarismos no MNIST (o equivalente embutido ao Keras MNIST), treine-o e mostre a acurácia.",
-  "Crie um projeto 'Aula 1', adicione as bases and_gate e xor_gate e mostre que o perceptron resolve AND mas não XOR.",
-  "Neste projeto, adicione a base xor_gate e treine um MLP com uma camada oculta de 4 neurônios tanh. Explique por que funciona.",
-  "Adicione a base digits e compare um MLP com uma CNN pequena. Qual tem menos parâmetros e mais acurácia?",
-  "Use o histórico climático (daily_min_temperatures) para prever a temperatura mínima de amanhã: compare RNN, LSTM e GRU e o modelo ingênuo.",
-  "Compare RNN, LSTM e GRU na base sequence_parity com sequências de tamanho 20.",
-  "Treine um autoencoder com latente 2D na base digits e depois uma versão denoising. O que muda?",
-  "Treine uma GAN na base moons e comente as curvas do discriminador e do gerador.",
+const DEMOS = [
+  {title: "1 · AND, XOR e MLP", prompt: "Modo demonstração em aula: crie o projeto 'Demo 1 · Linearidade'. Adicione and_gate e xor_gate com repeat 1 e noise 0, mantendo exatamente as 4 linhas de cada tabela verdade. Treine um Perceptron nas duas bases e depois um MLP com uma camada oculta de 4 neurônios e ativação tanh no XOR. Compare os treinos e explique visualmente por que o Perceptron falha no XOR."},
+  {title: "2 · CNN e MNIST", prompt: "Modo demonstração em aula: crie o projeto 'Demo 2 · CNN e MNIST'. Adicione MNIST com 3000 amostras, crie uma CNN pequena, treine por 3 épocas e interprete acurácia e matriz de confusão. Ao final, explique como testar o modelo desenhando um algarismo na tela."},
+  {title: "3 · RNN, LSTM e GRU", prompt: "Modo demonstração em aula: crie o projeto 'Demo 3 · Memória recorrente'. Adicione sequence_parity com 800 amostras e sequências de tamanho 20. Crie RNN, LSTM e GRU com hidden_size 16, treine cada uma por 12 épocas, compare os resultados e relacione as diferenças com memória e desaparecimento do gradiente."},
+  {title: "3B · Próxima palavra", prompt: "Modo demonstração em aula: crie o projeto 'Demo 3B · Próxima palavra'. Adicione a base next_word com window 3. Crie uma RNN e uma LSTM com hidden_size 24, treine ambas por 20 épocas, compare a acurácia e explique que cada palavra foi convertida em vetor one-hot. Ao final, mostre como testar escrevendo 'o modelo prevê' para obter uma sugestão de próxima palavra."},
+  {title: "4 · Autoencoder", prompt: "Modo demonstração em aula: crie o projeto 'Demo 4 · Autoencoder'. Adicione digits. Treine um autoencoder básico com espaço latente 2D e depois uma versão denoising, ambos por 12 épocas. Compare o erro de reconstrução, as reconstruções e o espaço latente."},
+  {title: "5 · GAN", prompt: "Modo demonstração em aula: crie o projeto 'Demo 5 · GAN'. Adicione moons com 1000 amostras e noise 0.08. Crie uma GAN com objetivo wgan_gp, generator_layers e discriminator_layers [128,128], critic_steps 3. Treine por 300 épocas, gere 16 amostras e compare visualmente os pontos reais e gerados. Explique que o crítico do WGAN-GP produz escores, não probabilidades, e que a qualidade não deve ser julgada só pela perda."},
+  {title: "6 · Auditoria do Harness", prompt: "Demonstração do Harness: sem alterar nada, liste os projetos, as bases disponíveis e as arquiteturas. Explique quais ferramentas MCP você chamou, em que ordem, o que veio do modelo e o que foi executado pelo harness. Peça que eu abra a aba Harness para conferir o registro."},
 ];
 
 export default function ChatPanel({ project, onToolResult }: { project: Project | null; onToolResult: () => void }) {
@@ -116,16 +117,26 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
           else last.parts.push({ kind: "text", text: ev.text });
           break;
         case "tool_use":
-          last.parts.push({ kind: "tool", id: ev.id, name: ev.name, input: ev.input });
+          last.parts.push({ kind: "tool", id: ev.id, name: ev.name, input: ev.input, status: "running" });
           break;
         case "tool_result":
-          last.parts = last.parts.map((p) => (p.kind === "tool" && p.id === ev.tool_use_id ? { ...p, result: ev.content, isError: ev.is_error } : p));
+          last.parts = last.parts.map((p) => (p.kind === "tool" && p.id === ev.tool_use_id ? { ...p, result: ev.content, isError: ev.is_error, status: ev.is_error ? "error" : "completed" } : p));
           break;
         case "result":
-          last.footer = `${ev.num_turns} turnos · ${(ev.duration_ms / 1000).toFixed(1)}s${ev.total_cost_usd ? ` · US$ ${ev.total_cost_usd.toFixed(4)}` : ""}`;
+          last.status = ev.is_error ? "error" : "completed";
+          last.parts = last.parts.map(p => p.kind === "tool" && p.status === "running" ? {...p, status: ev.is_error ? "error" : "completed"} : p);
+          last.footer = `${ev.is_error ? "Falhou" : "Concluído"} · ${ev.num_turns} turnos · ${(ev.duration_ms / 1000).toFixed(1)}s${ev.total_cost_usd ? ` · US$ ${ev.total_cost_usd.toFixed(4)}` : ""}`;
           break;
         case "error":
+          last.status = "error";
+          last.parts = last.parts.map(p => p.kind === "tool" && p.status === "running" ? {...p, status: "error"} : p);
           last.parts.push({ kind: "text", text: `**Erro:** ${ev.message}` });
+          last.footer = "Falhou";
+          break;
+        case "done":
+          if (last.status === "running") last.status = "completed";
+          last.parts = last.parts.map(p => p.kind === "tool" && p.status === "running" ? {...p, status: "completed"} : p);
+          last.footer ||= "Concluído";
           break;
       }
       return out;
@@ -136,6 +147,20 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
     }
     if (ev.type === "result" && ev.session_id) setSessionId(ev.session_id);
     if (ev.type === "tool_result") onToolResultRef.current(); // o Claude mudou algo -> recarrega a UI
+  }
+
+  function finishLast(status: ExecutionStatus) {
+    setMsgs(prev => {
+      if (!prev.length) return prev;
+      const out = [...prev];
+      const last = {...out[out.length - 1], parts: [...out[out.length - 1].parts]};
+      if (last.role !== "assistant") return prev;
+      last.status = status;
+      last.parts = last.parts.map(p => p.kind === "tool" && p.status === "running" ? {...p, status} : p);
+      last.footer ||= status === "cancelled" ? "Interrompido" : status === "error" ? "Falhou" : "Concluído";
+      out[out.length - 1] = last;
+      return out;
+    });
   }
 
   async function attach(file: File) {
@@ -162,13 +187,15 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
     setBusy(true);
     const userMsg: Msg = { role: "user", parts: [{ kind: "text", text: typed }] };
     if (att) userMsg.attachment = { filename: att.filename, summary: attachmentLabel(att) };
-    setMsgs((m) => [...m, userMsg, { role: "assistant", parts: [] }]);
+    setMsgs((m) => [...m, userMsg, { role: "assistant", parts: [], status: "running" }]);
     abort.current = new AbortController();
     try {
       const history = msgs.slice(-30).map(m => ({role: m.role, content: m.parts.filter(p => p.kind === "text").map(p => p.kind === "text" ? p.text : "").join("\n")}));
       await streamChat({ message, session_id: provider === "claude-code" ? sessionId : null, project_id: project?.id ?? null, model: model || null, provider, history, policy }, apply, abort.current.signal);
+      finishLast("completed");
     } catch (e: any) {
-      if (e.name !== "AbortError") apply({ type: "error", message: e.message });
+      if (e.name === "AbortError") finishLast("cancelled");
+      else { apply({ type: "error", message: e.message }); finishLast("error"); }
     } finally {
       setBusy(false);
       setEvents(es => es.map(e => e.type === "permission" && e.decision === "awaiting" ? {...e, decision: "cancelled", reason: "Conversa encerrada sem executar a ação pendente."} : e));
@@ -245,13 +272,13 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
                   ) : null}
                   .
                 </p>
-                <div className="suggest">
-                  {SUGGESTIONS.slice(0, 3).map((s) => (
-                    <button key={s} onClick={() => send(s)}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
+                <details className="demo-suggestions">
+                  <summary>Exemplos prontos para aula</summary>
+                  <div className="suggest">
+                    {DEMOS.map((demo) => <button key={demo.title} onClick={() => setInput(demo.prompt)}>{demo.title}</button>)}
+                  </div>
+                  <p className="small">Clique em um exemplo para colocá-lo no campo de mensagem. Você pode editar antes de enviar.</p>
+                </details>
               </div>
             )}
             {msgs.map((m, i) => (
@@ -276,7 +303,7 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
                     <ToolCard key={j} part={p} />
                   ),
                 )}
-                {m.role === "assistant" && busy && i === msgs.length - 1 && (
+                {m.role === "assistant" && m.status === "running" && i === msgs.length - 1 && (
                   <div className="row small" style={{ color: "#91a5bb" }}>
                     <span className="spinner" /> trabalhando…
                   </div>
@@ -501,12 +528,14 @@ function pretty(s?: string) {
 
 function ToolCard({ part }: { part: Extract<Part, { kind: "tool" }> }) {
   const { server, tool } = shortName(part.name);
+  const label = {running: "em execução", completed: "concluída", error: "falhou", cancelled: "interrompida"}[part.status];
   return (
     <details className={`tool ${part.isError ? "err" : ""}`}>
       <summary>
-        {part.result === undefined ? <span className="spinner" /> : <span>{part.isError ? "✕" : "✓"}</span>}
+        {part.status === "running" ? <span className="spinner" /> : <span>{part.status === "completed" ? "✓" : part.status === "error" ? "✕" : "■"}</span>}
         <span className="tname">{tool}</span>
         <span className="tserver">{server}</span>
+        <span className={`tool-status ${part.status}`}>{label}</span>
       </summary>
       <pre>{`→ entrada\n${JSON.stringify(part.input, null, 1)}`}</pre>
       {part.result !== undefined && <pre>{`← resultado\n${pretty(part.result)}`}</pre>}

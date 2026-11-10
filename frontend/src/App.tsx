@@ -14,6 +14,7 @@ export default function App() {
   const [online, setOnline] = useState<boolean | null>(null);
   const [chatOpen, setChatOpen] = useState(true);
   const [newName, setNewName] = useState("");
+  const [deletingAll, setDeletingAll] = useState(false);
 
   const refreshProjects = useCallback(async () => {
     try {
@@ -79,6 +80,26 @@ export default function App() {
     setSelected(p.id);
   }
 
+  async function deleteAllProjects() {
+    if (!projects.length || deletingAll) return;
+    const message = `Apagar todos os ${projects.length} projetos? Isso também remove as bases, modelos e treinos de cada projeto. Esta ação não pode ser desfeita.`;
+    if (!window.confirm(message)) return;
+    setDeletingAll(true);
+    try {
+      // Em sequência para evitar concorrência na atualização da base local.
+      for (const item of projects) await api.deleteProject(item.id);
+      localStorage.removeItem("dl.project");
+      setSelected(null);
+      setProject(null);
+      await refreshProjects();
+    } catch (error) {
+      window.alert(`Não foi possível apagar todos os projetos: ${error instanceof Error ? error.message : "erro desconhecido"}`);
+      await refreshProjects();
+    } finally {
+      setDeletingAll(false);
+    }
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -96,8 +117,11 @@ export default function App() {
           <span className="hbadge">
             <b>{archs.length}</b> arquiteturas · <b>{catalog.length}</b> bases
           </span>
-          <a className="btn dark-ghost" href="/apresentacao" target="_blank" rel="noreferrer" style={{ textDecoration: "none" }} title="Slides: o que é um harness">
-            Apresentação
+          <a className="btn dark-ghost" href="/apresentacao.html" target="_blank" rel="noreferrer" style={{ textDecoration: "none" }} title="Apresentação 1: o que é um harness">
+            Apresentação 1
+          </a>
+          <a className="btn dark-ghost" href="/apresentacao2.html" target="_blank" rel="noreferrer" style={{ textDecoration: "none" }} title="Apresentação 2: vibe coding e uso corporativo">
+            Apresentação 2
           </a>
           <button className="btn dark-ghost" onClick={() => setChatOpen((v) => !v)}>
             {chatOpen ? "Ocultar chat" : "Abrir chat"}
@@ -114,6 +138,11 @@ export default function App() {
               +
             </button>
           </div>
+          {projects.length > 0 && (
+            <button className="btn danger" onClick={deleteAllProjects} disabled={deletingAll} style={{ width: "100%", marginBottom: 10 }}>
+              {deletingAll ? "Apagando projetos…" : "Apagar todos os projetos"}
+            </button>
+          )}
           {projects.map((p) => (
             <button key={p.id} className={`proj ${p.id === selected ? "active" : ""}`} onClick={() => setSelected(p.id)}>
               <strong>{p.name}</strong>

@@ -129,13 +129,17 @@ ARCHITECTURES: dict[str, dict[str, Any]] = {
     "gan": {
         "aula": 3,
         "description": "GAN (Goodfellow, 2014): gerador (falsificador) x discriminador (perito) em jogo adversarial. "
-                       "Versão MLP (vanilla GAN).",
+                       "Versão MLP com WGAN-GP como padrão para um treino mais estável em dados 2D.",
         "tasks": ["image_classification", "tabular_classification", "unsupervised"],
-        "default_config": {"latent_dim": 16, "generator_layers": [64, 128], "discriminator_layers": [128, 64]},
+        "default_config": {"latent_dim": 16, "generator_layers": [128, 128], "discriminator_layers": [128, 128],
+                           "objective": "wgan_gp", "critic_steps": 3, "gp_weight": 10.0},
         "config_doc": {
             "latent_dim": "dimensão do ruído z de entrada do gerador",
             "generator_layers": "camadas ocultas do gerador",
             "discriminator_layers": "camadas ocultas do discriminador",
+            "objective": "wgan_gp (mais estável, padrão) | bce (GAN clássica)",
+            "critic_steps": "quantas atualizações do crítico para cada atualização do gerador (WGAN-GP)",
+            "gp_weight": "peso da penalidade de gradiente (WGAN-GP; padrão 10)",
         },
     },
 }
@@ -149,6 +153,8 @@ def validate_config(arch: str, config: dict | None) -> dict:
         raise ValueError("d_model precisa ser múltiplo de nhead")
     if arch == "autoencoder" and merged["variant"] not in ("basic", "denoising", "sparse", "variational"):
         raise ValueError("variant deve ser basic | denoising | sparse | variational")
+    if arch == "gan" and merged["objective"] not in ("wgan_gp", "bce"):
+        raise ValueError("objective da GAN deve ser wgan_gp ou bce")
     return merged
 
 

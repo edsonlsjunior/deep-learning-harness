@@ -30,7 +30,7 @@ DEFAULT_HP: dict[str, dict[str, Any]] = {
     "gru": {"epochs": 30, "lr": 0.003, "batch_size": 32, "optimizer": "adam"},
     "transformer": {"epochs": 30, "lr": 0.001, "batch_size": 32, "optimizer": "adam"},
     "autoencoder": {"epochs": 30, "lr": 0.001, "batch_size": 64, "optimizer": "adam"},
-    "gan": {"epochs": 100, "lr": 0.0005, "batch_size": 64, "optimizer": "adam"},
+    "gan": {"epochs": 300, "lr": 0.0002, "batch_size": 64, "optimizer": "adam"},
 }
 COMMON_HP = {"test_size": 0.2, "normalize": True, "seed": 42, "weight_decay": 0.0, "momentum": 0.9}
 
@@ -387,32 +387,48 @@ def _train_gan(model, hp, X, y, meta, log):
     net = A.build_torch("gan", cfg, meta)
     optG = torch.optim.Adam(net.G.parameters(), lr=hp["lr"], betas=(0.5, 0.999))
     optD = torch.optim.Adam(net.D.parameters(), lr=hp["lr"], betas=(0.5, 0.999))
+    objective = cfg.get("objective", "bce")  # mantém compatibilidade com GANs criadas antes desta melhoria
+    critic_steps = int(cfg.get("critic_steps", 1)) if objective == "wgan_gp" else 1
+    gp_weight = float(cfg.get("gp_weight", 10.0))
     bce = nn.BCEWithLogitsLoss()
     Xt = torch.tensor(data)
     rng = np.random.default_rng(hp["seed"])
+    torch.manual_seed(int(hp["seed"]))
     for ep in range(1, int(hp["epochs"]) + 1):
         dl = gl = dx = 0.0
         nb = 0
         for b in _batches(len(Xt), int(hp["batch_size"]), rng):
             real = Xt[b]
             n = len(b)
-            # 1) discriminador (perito): real -> 1, falso -> 0
-            fake = net.sample(n).detach()
-            optD.zero_grad()
-            d_real, d_fake = net.D(real), net.D(fake)
-            lossD = bce(d_real, torch.ones_like(d_real)) + bce(d_fake, torch.zeros_like(d_fake))
-            lossD.backward()
-            optD.step()
-            # 2) gerador (falsificador): tenta fazer o D dizer 1 para o falso
+            # 1) Crítico/perito. WGAN-GP mede a distância entre distribuições e limita
+            # o gradiente do crítico; para as luas isso reduz bastante o mode collapse.
+            for _ in range(critic_steps):
+                fake = net.sample(n).detach()
+                optD.zero_grad()
+                d_real, d_fake = net.D(real), net.D(fake)
+                if objective == "wgan_gp":
+                    alpha = torch.rand(n, 1)
+                    mixed = (alpha * real + (1 - alpha) * fake).requires_grad_(True)
+                    mixed_score = net.D(mixed)
+                    grad = torch.autograd.grad(mixed_score, mixed, torch.ones_like(mixed_score),
+                                               create_graph=True, only_inputs=True)[0]
+                    penalty = ((grad.flatten(1).norm(2, dim=1) - 1) ** 2).mean()
+                    lossD = d_fake.mean() - d_real.mean() + gp_weight * penalty
+                else:
+                    lossD = bce(d_real, torch.ones_like(d_real)) + bce(d_fake, torch.zeros_like(d_fake))
+                lossD.backward()
+                optD.step()
+            # 2) Gerador/falsificador: procura aumentar a avaliação do crítico.
             optG.zero_grad()
             d_gen = net.D(net.sample(n))
-            lossG = bce(d_gen, torch.ones_like(d_gen))
+            lossG = -d_gen.mean() if objective == "wgan_gp" else bce(d_gen, torch.ones_like(d_gen))
             lossG.backward()
             optG.step()
-            dl, gl = dl + float(lossD), gl + float(lossG)
-            dx += float(torch.sigmoid(d_real).mean())
+            dl, gl = dl + float(lossD.detach()), gl + float(lossG.detach())
+            score = d_real.mean() if objective == "wgan_gp" else torch.sigmoid(d_real).mean()
+            dx += float(score.detach())
             nb += 1
-        log({"epoch": ep, "d_loss": dl / nb, "g_loss": gl / nb, "d_real_prob": dx / nb})
+        log({"epoch": ep, "d_loss": dl / nb, "g_loss": gl / nb, "d_real_score": dx / nb})
 
     net.eval()
     with torch.no_grad():
@@ -428,7 +444,8 @@ def _train_gan(model, hp, X, y, meta, log):
         sel = rng.permutation(len(flat))[:500]
         extras["plot"] = {"kind": "gan2d", "real": flat[sel].round(4).tolist(), "generated": gen.round(4).tolist()}
     metrics = {"n_params": A.count_params(net), "n_params_generator": A.count_params(net.G),
-               "n_params_discriminator": A.count_params(net.D)}
+               "n_params_discriminator": A.count_params(net.D), "objective": objective,
+               "critic_steps": critic_steps}
     return metrics, extras, {"arch": "gan", "config": cfg, "meta": meta, "prep": prep.dump(), "state": net.state_dict()}
 
 
@@ -465,7 +482,12 @@ def predict(run_id: int, inputs: list) -> dict:
             flat = torch.tensor(prep.tx(X.reshape(len(X), -1)), dtype=torch.float32)
             recon, mu, _ = net(flat)
             err = ((recon - flat) ** 2).mean(1)
-            return {"reconstruction_error": err.numpy().round(6).tolist(), "latent": mu.numpy().round(4).tolist()}
+            # Devolve também a reconstrução no formato original. Assim a interface pode
+            # comparar uma amostra desenhada/fornecida pelo aluno com a saída do decoder.
+            restored = recon.numpy().reshape(len(X), *meta["input_shape"])
+            return {"reconstruction_error": err.numpy().round(6).tolist(),
+                    "latent": mu.numpy().round(4).tolist(),
+                    "reconstruction": restored.round(4).tolist()}
         Xn = prep.tx(X) if meta["task"].startswith("tabular") else X
         out = net(torch.tensor(Xn, dtype=torch.float32))
     if meta["task"].endswith("regression"):

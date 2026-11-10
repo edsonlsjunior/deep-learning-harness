@@ -51,7 +51,7 @@ export const api = {
   run: (id: number) => req<Run>("GET", `/api/runs/${id}`),
   cancelRun: (id: number) => req("POST", `/api/runs/${id}/cancel`),
   deleteRun: (id: number) => req("DELETE", `/api/runs/${id}`),
-  predict: (id: number, inputs: unknown[]) => req<{predictions: number[]; labels?: string[] | null; probabilities?: number[][]}>("POST", `/api/runs/${id}/predict`, {inputs}),
+  predict: (id: number, inputs: unknown[]) => req<{predictions?: number[]; labels?: string[] | null; probabilities?: number[][]; reconstruction_error?: number[]; latent?: number[][]; reconstruction?: number[][][][] | number[][]}>("POST", `/api/runs/${id}/predict`, {inputs}),
   generate: (id: number, n = 16) => req<any>("POST", `/api/runs/${id}/generate?n=${n}`),
   harness: () => req<any>("GET", "/api/harness"),
 };

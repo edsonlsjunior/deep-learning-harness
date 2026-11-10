@@ -27,6 +27,11 @@ export interface DatasetMeta {
   description?: string;
   target_stats?: Record<string, number>;
   note?: string;
+  word_prediction?: {
+    vocabulary: string[];
+    window: number;
+    examples: string[];
+  };
 }
 
 export interface Dataset {
