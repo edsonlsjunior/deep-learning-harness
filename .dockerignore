@@ -1,0 +1,8 @@
+.git
+.github
+.mcp.local.json
+backend/.venv
+backend/data
+frontend/node_modules
+**/__pycache__
+*.pyc

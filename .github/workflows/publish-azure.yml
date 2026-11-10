@@ -28,7 +28,16 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
-          package: .
+      - run: az acr login --name ${{ vars.AZURE_ACR_NAME }}
+      - run: |
+          IMAGE="${{ vars.AZURE_ACR_LOGIN_SERVER }}/dl-harness:${{ github.sha }}"
+          docker build --tag "$IMAGE" --tag "${{ vars.AZURE_ACR_LOGIN_SERVER }}/dl-harness:latest" .
+          docker push "$IMAGE"
+          docker push "${{ vars.AZURE_ACR_LOGIN_SERVER }}/dl-harness:latest"
+      - run: |
+          az webapp config container set \
+            --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --docker-custom-image-name "${{ vars.AZURE_ACR_LOGIN_SERVER }}/dl-harness:${{ github.sha }}" \
+            --docker-registry-server-url "https://${{ vars.AZURE_ACR_LOGIN_SERVER }}"
+          az webapp restart --name "${{ vars.AZURE_WEBAPP_NAME }}" --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}"
