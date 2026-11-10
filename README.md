@@ -20,7 +20,7 @@ O modelo de linguagem, sozinho, só recebe texto e devolve texto. O **harness** 
 
 | Peça do harness | Onde está neste projeto |
 |---|---|
-| **Loop agêntico** (modelo → ferramenta → resultado → modelo …) | Codex ou Claude Code em modo headless |
+| **Loop agêntico** (modelo → ferramenta → resultado → modelo …) | Codex, Claude Code ou GitHub Copilot CLI em modo headless |
 | **Ferramentas** que o agente pode usar | `backend/mcp_server/server.py` (22 ferramentas MCP) |
 | **Transporte** das ferramentas | MCP via **stdio**: o Claude Code inicia o servidor como subprocesso |
 | **Contexto / instruções** | `--append-system-prompt` em `backend/app/chat.py` (conteúdo das aulas + regras) |
@@ -101,6 +101,17 @@ faz consultas ao laboratório, sem solicitar chave de API. Nesta versão, criaç
 e treinamento com Codex são feitos pelos botões da interface. Uso sujeito aos
 limites da conta. O CLI deve estar no PATH; `DL_LAB_CODEX_BIN` aceita seu caminho
 absoluto. No macOS, também é detectado o CLI incluído no aplicativo ChatGPT.
+
+Para **GitHub Copilot CLI**, instale o `copilot` (por exemplo,
+`winget install GitHub.Copilot` ou `npm install -g @github/copilot`) e execute
+`copilot login` uma vez no mesmo usuário que roda o backend. Também funcionam
+`COPILOT_GITHUB_TOKEN`/`GH_TOKEN` no ambiente do backend. `DL_LAB_COPILOT_BIN`
+aceita o caminho absoluto do CLI. O Copilot roda em modo headless
+(`copilot -p --output-format json`) num diretório temporário, sem instruções
+personalizadas, sem MCPs embutidos e só com as ferramentas `dl-lab`. A política
+Consultar / Confirmar / Operar vale como no Claude Code, e a conversa continua
+com `--resume`. O login é verificado na primeira mensagem. Cada mensagem consome
+*premium requests* da sua assinatura Copilot.
 
 Claude Code exige seu próprio CLI instalado e logado. OpenAI API/Gemini API usam
 `OPENAI_API_KEY`/`GEMINI_API_KEY` no ambiente do backend. Para servidor local,

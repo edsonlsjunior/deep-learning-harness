@@ -191,7 +191,7 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
     abort.current = new AbortController();
     try {
       const history = msgs.slice(-30).map(m => ({role: m.role, content: m.parts.filter(p => p.kind === "text").map(p => p.kind === "text" ? p.text : "").join("\n")}));
-      await streamChat({ message, session_id: provider === "claude-code" ? sessionId : null, project_id: project?.id ?? null, model: model || null, provider, history, policy }, apply, abort.current.signal);
+      await streamChat({ message, session_id: provider === "claude-code" || provider === "copilot" ? sessionId : null, project_id: project?.id ?? null, model: model || null, provider, history, policy }, apply, abort.current.signal);
       finishLast("completed");
     } catch (e: any) {
       if (e.name === "AbortError") finishLast("cancelled");
@@ -378,7 +378,7 @@ export default function ChatPanel({ project, onToolResult }: { project: Project 
               <details className="chat-options">
                 <summary>Mais opções</summary>
                 <div className="row option-actions">
-                  {provider !== "claude-code" ? <input aria-label="Modelo de IA" placeholder={provider === "codex" ? "Modelo padrão do Codex" : "Nome do modelo"} value={model} disabled={busy} onChange={e => { setModel(e.target.value); setSessionId(null); }} /> : <select value={model} disabled={busy} onChange={(e) => { setModel(e.target.value); setSessionId(null); }} title="Modelo usado pelo Claude Code">
+                  {provider !== "claude-code" ? <input aria-label="Modelo de IA" placeholder={provider === "codex" ? "Modelo padrão do Codex" : provider === "copilot" ? "Modelo padrão do Copilot" : "Nome do modelo"} value={model} disabled={busy} onChange={e => { setModel(e.target.value); setSessionId(null); }} /> : <select value={model} disabled={busy} onChange={(e) => { setModel(e.target.value); setSessionId(null); }} title="Modelo usado pelo Claude Code">
                     <option value="">modelo padrão</option><option value="opus">opus</option><option value="sonnet">sonnet</option><option value="haiku">haiku</option>
                   </select>}
                   <button className="btn dark-ghost sm" disabled={busy || detecting} onClick={detectProviders}>{detecting ? "Detectando…" : "Verificar conexão"}</button>

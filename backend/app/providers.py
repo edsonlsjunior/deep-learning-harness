@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 import httpx
-from . import codex_chat
+from . import codex_chat, copilot_chat
 from . import harness as H
 
 PROVIDERS = {
@@ -24,7 +24,7 @@ PROVIDERS = {
 
 
 def catalog():
-    return [{"id": "codex", "name": "Codex — assinatura ChatGPT", "configured": False, "default_model": ""}, {"id": "claude-code", "name": "Claude Code", "configured": bool(__import__("shutil").which("claude")), "default_model": ""}] + [
+    return [{"id": "codex", "name": "Codex — assinatura ChatGPT", "configured": False, "default_model": ""}, {"id": "claude-code", "name": "Claude Code", "configured": bool(__import__("shutil").which("claude")), "default_model": ""}, {"id": "copilot", "name": "GitHub Copilot CLI", "configured": bool(copilot_chat.executable()), "default_model": ""}] + [
         {"id": key, "name": {"openai": "OpenAI API", "gemini": "Gemini API", "local": "Local (Ollama)"}[key],
          "configured": not env or bool(os.environ.get(env)), "default_model": model}
         for key, (_, env, model) in PROVIDERS.items()
@@ -37,6 +37,8 @@ async def detect():
         item = {**item, "models": [], "available": False}
         if item["id"] == "codex":
             return await codex_chat.status()
+        if item["id"] == "copilot":
+            return copilot_chat.status()
         if item["id"] == "claude-code":
             item["status"] = "CLI instalado; login não verificado" if item["configured"] else "CLI não instalado"
             return item

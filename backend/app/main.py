@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import architectures as A
-from . import chat, db, files, kaggle, training, providers, codex_chat, harness as H
+from . import chat, db, files, kaggle, training, providers, codex_chat, copilot_chat, harness as H
 from . import datasets as D
 
 app = FastAPI(title="DL Lab API", version="1.0")
@@ -328,6 +328,8 @@ def chat_endpoint(body: ChatIn):
     run = H.create(body.policy)
     if body.provider == "codex":
         source = codex_chat.stream_chat(body.message, body.model, project, body.history, agent_token=run.token, policy=body.policy)
+    elif body.provider == "copilot":
+        source = copilot_chat.stream_chat(body.message, body.session_id, body.model, project, agent_token=run.token, policy=body.policy)
     elif body.provider != "claude-code":
         source = providers.stream_chat(body.message, body.provider, body.model, project, body.history, agent_token=run.token, policy=body.policy)
     else:
