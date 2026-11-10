@@ -74,7 +74,7 @@ async def detect(session_credentials: dict[str, str] | None = None):
     return await asyncio.gather(*(probe(p) for p in catalog(set(session_credentials))))
 
 
-async def agent_events(message, provider, model, project, history, agent_token=None, policy="consult", api_key=None):
+async def agent_events(message, provider, model, project, history, agent_token=None, policy="consult", api_key=None, owner_session=None):
     started = time.monotonic()
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
@@ -103,6 +103,8 @@ async def agent_events(message, provider, model, project, history, agent_token=N
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     if agent_token:
         env["DL_LAB_AGENT_TOKEN"] = agent_token
+    if owner_session:
+        env["DL_LAB_OWNER_SESSION"] = owner_session
     params = StdioServerParameters(command=sys.executable, args=[str(server)], env=env)
     async with stdio_client(params) as (reader, writer):
         async with ClientSession(reader, writer) as session:
@@ -137,9 +139,9 @@ async def agent_events(message, provider, model, project, history, agent_token=N
                 raise ValueError("Limite de 20 rodadas atingido. Consulte o projeto antes de repetir ações.")
 
 
-async def stream_chat(message, provider, model, project, history, agent_token=None, policy="consult", api_key=None):
+async def stream_chat(message, provider, model, project, history, agent_token=None, policy="consult", api_key=None, owner_session=None):
     try:
-        async for event in agent_events(message, provider, model, project, history, agent_token, policy, api_key):
+        async for event in agent_events(message, provider, model, project, history, agent_token, policy, api_key, owner_session):
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
     except asyncio.CancelledError:
         raise

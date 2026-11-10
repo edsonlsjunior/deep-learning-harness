@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS projects (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     description TEXT DEFAULT '',
+    owner_session TEXT,
     created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS datasets (
@@ -82,6 +83,10 @@ def _connect() -> sqlite3.Connection:
 
 _conn = _connect()
 _conn.executescript(SCHEMA)
+# Migração compatível com os bancos locais criados antes da área anônima.
+if "owner_session" not in {row[1] for row in _conn.execute("PRAGMA table_info(projects)")}:
+    _conn.execute("ALTER TABLE projects ADD COLUMN owner_session TEXT")
+    _conn.commit()
 
 
 def _row(r: sqlite3.Row | None) -> dict[str, Any] | None:

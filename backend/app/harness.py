@@ -53,6 +53,7 @@ def instructions(policy):
 @dataclass
 class Run:
     policy: Policy
+    owner_session: str | None = None
     id: str = field(default_factory=lambda: secrets.token_urlsafe(24))
     token: str = field(default_factory=lambda: secrets.token_urlsafe(32))
     started: float = field(default_factory=time.monotonic)
@@ -68,12 +69,18 @@ class Run:
 RUNS: dict[str, Run] = {}
 
 
-def create(policy):
+def create(policy, owner_session: str | None = None):
     if policy not in POLICIES:
         raise ValueError("Política inválida")
-    run = Run(policy)
+    run = Run(policy, owner_session)
     RUNS[run.token] = run
     return run
+
+
+def owner_for(token: str) -> str | None:
+    """Sessão do visitante associada a uma chamada MCP autenticada pelo token efêmero."""
+    run = RUNS.get(token)
+    return run.owner_session if run and not run.closed else None
 
 
 def close(run):

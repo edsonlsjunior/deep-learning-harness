@@ -47,7 +47,10 @@ async def call(method: str, path: str, **kw) -> Any:
         token = os.environ.get("DL_LAB_AGENT_TOKEN")
         if token:
             caller = inspect.currentframe().f_back.f_code.co_name
-            r = await c.post("/api/harness/execute", json={"method": method, "path": path, "tool": caller, "kwargs": kw}, headers={"Authorization": f"Bearer {token}"})
+            headers = {"Authorization": f"Bearer {token}"}
+            if owner := os.environ.get("DL_LAB_OWNER_SESSION"):
+                headers["X-DL-Lab-Owner"] = owner
+            r = await c.post("/api/harness/execute", json={"method": method, "path": path, "tool": caller, "kwargs": kw}, headers=headers)
         else:
             r = await c.request(method, path, **kw)
     if r.status_code >= 400:

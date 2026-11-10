@@ -77,6 +77,63 @@ def _session_provider_keys(request: Request) -> dict[str, str]:
     return {"openai": key} if key else {}
 
 
+def _owner_session(request: Request, response: Response | None = None) -> str | None:
+    """Dono anônimo do espaço público; chamadas MCP só entram pelo gateway ativo."""
+    if not providers.public_mode():
+        return None
+    if owner := request.cookies.get(COOKIE_NAME):
+        return owner
+    internal_owner = request.headers.get("X-DL-Lab-Owner")
+    gateway_token = request.headers.get("X-DL-Lab-Gateway", "")
+    if internal_owner and H.owner_for(gateway_token) == internal_owner:
+        return internal_owner
+    if response is not None:
+        return _session_id(request, response)
+    raise HTTPException(401, "Sessão anônima ausente ou expirada. Recarregue a página.")
+
+
+def _owned_project(request: Request, pid: int, response: Response | None = None) -> dict:
+    owner = _owner_session(request, response)
+    if owner:
+        return _404(db.one("SELECT * FROM projects WHERE id = ? AND owner_session = ?", (pid, owner)), "Projeto")
+    return _404(db.one("SELECT * FROM projects WHERE id = ?", (pid,)), "Projeto")
+
+
+def _owned_dataset(request: Request, did: int) -> dict:
+    owner = _owner_session(request)
+    sql = "SELECT d.* FROM datasets d JOIN projects p ON p.id = d.project_id WHERE d.id = ?"
+    args: tuple = (did,)
+    if owner:
+        sql += " AND p.owner_session = ?"
+        args += (owner,)
+    return _404(db.one(sql, args), "Base")
+
+
+def _owned_model(request: Request, mid: int) -> dict:
+    owner = _owner_session(request)
+    sql = "SELECT m.* FROM models m JOIN projects p ON p.id = m.project_id WHERE m.id = ?"
+    args: tuple = (mid,)
+    if owner:
+        sql += " AND p.owner_session = ?"
+        args += (owner,)
+    return _404(db.one(sql, args), "Modelo")
+
+
+def _owned_run(request: Request, rid: int) -> dict:
+    owner = _owner_session(request)
+    sql = "SELECT r.* FROM runs r JOIN projects p ON p.id = r.project_id WHERE r.id = ?"
+    args: tuple = (rid,)
+    if owner:
+        sql += " AND p.owner_session = ?"
+        args += (owner,)
+    return _404(db.one(sql, args), "Execução")
+
+
+def _public_storage_blocked():
+    if providers.public_mode():
+        raise HTTPException(403, "Uploads e Kaggle ficam desativados na versão pública.")
+
+
 # ------------------------------------------------------------------ schemas
 class ProjectIn(BaseModel):
     name: str
@@ -162,23 +219,39 @@ def _run_summary(r: dict) -> dict:
 
 
 @app.get("/api/projects")
-def list_projects():
-    return db.query("""SELECT p.*,
+def list_projects(request: Request):
+    owner = _owner_session(request)
+    sql = """SELECT p.*,
         (SELECT COUNT(*) FROM datasets d WHERE d.project_id = p.id) AS n_datasets,
         (SELECT COUNT(*) FROM models m WHERE m.project_id = p.id) AS n_models,
         (SELECT COUNT(*) FROM runs r WHERE r.project_id = p.id) AS n_runs
-        FROM projects p ORDER BY p.id DESC""")
+        FROM projects p"""
+    args: tuple = ()
+    if owner:
+        sql += " WHERE p.owner_session = ?"
+        args = (owner,)
+    projects = db.query(sql + " ORDER BY p.id DESC", args)
+    for project in projects:
+        project.pop("owner_session", None)
+    return projects
 
 
 @app.post("/api/projects")
-def create_project(body: ProjectIn):
-    pid = db.insert("projects", {"name": body.name, "description": body.description, "created_at": db.now()})
-    return db.one("SELECT * FROM projects WHERE id = ?", (pid,))
+def create_project(body: ProjectIn, request: Request, response: Response):
+    owner = _owner_session(request, response)
+    values = {"name": body.name, "description": body.description, "created_at": db.now()}
+    if owner:
+        values["owner_session"] = owner
+    pid = db.insert("projects", values)
+    project = db.one("SELECT * FROM projects WHERE id = ?", (pid,))
+    project.pop("owner_session", None)
+    return project
 
 
 @app.get("/api/projects/{pid}")
-def get_project(pid: int):
-    p = _404(db.one("SELECT * FROM projects WHERE id = ?", (pid,)), "Projeto")
+def get_project(pid: int, request: Request):
+    p = _owned_project(request, pid)
+    p.pop("owner_session", None)
     p["datasets"] = db.query("SELECT * FROM datasets WHERE project_id = ? ORDER BY id", (pid,))
     p["models"] = db.query("SELECT * FROM models WHERE project_id = ? ORDER BY id", (pid,))
     p["runs"] = [_run_summary(r) for r in db.query("SELECT * FROM runs WHERE project_id = ? ORDER BY id DESC", (pid,))]
@@ -186,8 +259,8 @@ def get_project(pid: int):
 
 
 @app.delete("/api/projects/{pid}")
-def delete_project(pid: int):
-    _404(db.one("SELECT id FROM projects WHERE id = ?", (pid,)), "Projeto")
+def delete_project(pid: int, request: Request):
+    _owned_project(request, pid)
     for d in db.query("SELECT id FROM datasets WHERE project_id = ?", (pid,)):
         D.remove(d["id"])
     db.delete("projects", pid)
@@ -196,8 +269,8 @@ def delete_project(pid: int):
 
 # ------------------------------------------------------------------ bases de dados
 @app.post("/api/projects/{pid}/datasets")
-def add_dataset(pid: int, body: DatasetIn):
-    _404(db.one("SELECT id FROM projects WHERE id = ?", (pid,)), "Projeto")
+def add_dataset(pid: int, body: DatasetIn, request: Request):
+    _owned_project(request, pid)
     return D.create(pid, body.source, body.name, body.params)
 
 
@@ -221,9 +294,10 @@ async def _save_upload(file: UploadFile, prefix: str) -> Path:
 
 
 @app.post("/api/projects/{pid}/datasets/upload")
-async def upload_dataset(pid: int, file: UploadFile = File(...), target_column: str = Form(""),
+async def upload_dataset(pid: int, request: Request, file: UploadFile = File(...), target_column: str = Form(""),
                          task: str = Form(""), name: str = Form("")):
-    _404(db.one("SELECT id FROM projects WHERE id = ?", (pid,)), "Projeto")
+    _public_storage_blocked()
+    _owned_project(request, pid)
     dest = await _save_upload(file, f"p{pid}")
     params = {"path": str(dest), "target_column": target_column or None, "task": task or None,
               "origin": file.filename}
@@ -233,6 +307,7 @@ async def upload_dataset(pid: int, file: UploadFile = File(...), target_column: 
 @app.post("/api/uploads")
 async def stage_upload(file: UploadFile = File(...)):
     """Upload pelo chat: o arquivo fica guardado e o Claude decide como importá-lo (alvo, tarefa)."""
+    _public_storage_blocked()
     dest = await _save_upload(file, "chat")
     try:
         info = files.inspect(dest)
@@ -250,52 +325,58 @@ def file_formats():
 
 @app.get("/api/files/inspect")
 def inspect_file(path: str, sheet: str | None = None):
+    _public_storage_blocked()
     return files.inspect(path, sheet)
 
 
 # ------------------------------------------------------------------ Kaggle
 @app.get("/api/kaggle/status")
 def kaggle_status():
+    _public_storage_blocked()
     return kaggle.status()
 
 
 @app.get("/api/kaggle/search")
 def kaggle_search(q: str, page: int = 1, file_type: str | None = None, sort_by: str = "hottest"):
+    _public_storage_blocked()
     return kaggle.search(q, page, file_type, sort_by)
 
 
 @app.get("/api/kaggle/files")
 def kaggle_files(ref: str):
+    _public_storage_blocked()
     return kaggle.list_files(ref)
 
 
 @app.post("/api/kaggle/download")
 def kaggle_download(body: KaggleDownloadIn):
+    _public_storage_blocked()
     return kaggle.download(body.ref, body.file_name)
 
 
 @app.get("/api/datasets/{did}")
-def get_dataset(did: int):
+def get_dataset(did: int, request: Request):
+    _owned_dataset(request, did)
     return _404(D.get(did), "Base")
 
 
 @app.get("/api/datasets/{did}/preview")
-def preview_dataset(did: int, n: int = 5):
-    _404(D.get(did), "Base")
+def preview_dataset(did: int, request: Request, n: int = 5):
+    _owned_dataset(request, did)
     return D.preview(did, n)
 
 
 @app.delete("/api/datasets/{did}")
-def delete_dataset(did: int):
-    _404(D.get(did), "Base")
+def delete_dataset(did: int, request: Request):
+    _owned_dataset(request, did)
     D.remove(did)
     return {"deleted": did}
 
 
 # ------------------------------------------------------------------ modelos
 @app.post("/api/projects/{pid}/models")
-def create_model(pid: int, body: ModelIn):
-    _404(db.one("SELECT id FROM projects WHERE id = ?", (pid,)), "Projeto")
+def create_model(pid: int, body: ModelIn, request: Request):
+    _owned_project(request, pid)
     cfg = A.validate_config(body.architecture, body.config)
     mid = db.insert("models", {"project_id": pid, "name": body.name, "architecture": body.architecture,
                                "config": cfg, "created_at": db.now()})
@@ -303,55 +384,63 @@ def create_model(pid: int, body: ModelIn):
 
 
 @app.get("/api/models/{mid}")
-def get_model(mid: int):
-    return _404(db.one("SELECT * FROM models WHERE id = ?", (mid,)), "Modelo")
+def get_model(mid: int, request: Request):
+    return _owned_model(request, mid)
 
 
 @app.delete("/api/models/{mid}")
-def delete_model(mid: int):
-    _404(db.one("SELECT id FROM models WHERE id = ?", (mid,)), "Modelo")
+def delete_model(mid: int, request: Request):
+    _owned_model(request, mid)
     db.delete("models", mid)
     return {"deleted": mid}
 
 
 # ------------------------------------------------------------------ execuções (treino)
 @app.post("/api/runs")
-def start_run(body: RunIn):
+def start_run(body: RunIn, request: Request):
+    model = _owned_model(request, body.model_id)
+    dataset = _owned_dataset(request, body.dataset_id)
+    if model["project_id"] != dataset["project_id"]:
+        raise HTTPException(400, "Modelo e base precisam pertencer ao mesmo projeto.")
     return training.start(body.model_id, body.dataset_id, body.hyperparams)
 
 
 @app.get("/api/runs/{rid}")
-def get_run(rid: int):
+def get_run(rid: int, request: Request):
+    _owned_run(request, rid)
     return _404(training.get(rid), "Execução")
 
 
 @app.get("/api/runs/{rid}/wait")
-def wait_run(rid: int, timeout: float = 60):
-    _404(training.get(rid), "Execução")
+def wait_run(rid: int, request: Request, timeout: float = 60):
+    _owned_run(request, rid)
     return training.wait(rid, min(timeout, 600))
 
 
 @app.post("/api/runs/{rid}/cancel")
-def cancel_run(rid: int):
+def cancel_run(rid: int, request: Request):
+    _owned_run(request, rid)
     training.cancel(rid)
     return {"cancelling": rid}
 
 
 @app.delete("/api/runs/{rid}")
-def delete_run(rid: int):
-    _404(training.get(rid), "Execução")
+def delete_run(rid: int, request: Request):
+    _owned_run(request, rid)
     db.delete("runs", rid)
     (db.ARTIFACTS_DIR / f"run_{rid}.pt").unlink(missing_ok=True)
     return {"deleted": rid}
 
 
 @app.post("/api/runs/{rid}/predict")
-def predict(rid: int, body: PredictIn):
+def predict(rid: int, body: PredictIn, request: Request):
+    _owned_run(request, rid)
     return training.predict(rid, body.inputs)
 
 
 @app.post("/api/runs/{rid}/generate")
-def generate(rid: int, n: int = 16):
+def generate(rid: int, request: Request, n: int = 16):
+    _owned_run(request, rid)
     return training.generate(rid, min(n, 64))
 
 
@@ -363,8 +452,9 @@ def harness():
 
 @app.post("/api/chat")
 def chat_endpoint(body: ChatIn, request: Request):
-    project = db.one("SELECT * FROM projects WHERE id = ?", (body.project_id,)) if body.project_id else None
-    run = H.create(body.policy)
+    owner = _owner_session(request)
+    project = _owned_project(request, body.project_id) if body.project_id else None
+    run = H.create(body.policy, owner)
     if body.provider == "codex":
         source = codex_chat.stream_chat(body.message, body.model, project, body.history, agent_token=run.token, policy=body.policy)
     elif body.provider == "copilot":
@@ -372,7 +462,7 @@ def chat_endpoint(body: ChatIn, request: Request):
     elif body.provider != "claude-code":
         # A chave não veio no corpo do chat: só é obtida da memória da sessão.
         api_key = _session_provider_keys(request).get(body.provider)
-        source = providers.stream_chat(body.message, body.provider, body.model, project, body.history, agent_token=run.token, policy=body.policy, api_key=api_key)
+        source = providers.stream_chat(body.message, body.provider, body.model, project, body.history, agent_token=run.token, policy=body.policy, api_key=api_key, owner_session=owner)
     else:
         source = chat.stream_chat(body.message, body.session_id, project, body.model, agent_token=run.token, policy=body.policy)
     return StreamingResponse(H.stream(run, source, chat.SYSTEM_PROMPT),
@@ -425,7 +515,10 @@ async def agent_execute(body: AgentCall, request: Request):
         raise HTTPException(400, "Parâmetros HTTP não permitidos.")
     async def forward():
         async with httpx.AsyncClient(base_url=chat.API_URL, timeout=660) as client:
-            response = await client.request(body.method, body.path, **body.kwargs)
+            headers = {}
+            if owner := H.owner_for(token):
+                headers = {"X-DL-Lab-Owner": owner, "X-DL-Lab-Gateway": token}
+            response = await client.request(body.method, body.path, headers=headers, **body.kwargs)
         if response.status_code >= 400:
             raise HTTPException(response.status_code, response.json().get("detail", "Erro na ferramenta"))
         return response.json()
