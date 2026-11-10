@@ -123,6 +123,9 @@ export default function App() {
           <a className="btn dark-ghost" href="/apresentacao2.html" target="_blank" rel="noreferrer" style={{ textDecoration: "none" }} title="Apresentação 2: vibe coding e uso corporativo">
             Apresentação 2
           </a>
+          <a className="btn dark-ghost" href="/cards-aula.html" target="_blank" rel="noreferrer" style={{ textDecoration: "none" }} title="Cards de apoio para a aula">
+            Cards da aula
+          </a>
           <button className="btn dark-ghost" onClick={() => setChatOpen((v) => !v)}>
             {chatOpen ? "Ocultar chat" : "Abrir chat"}
           </button>

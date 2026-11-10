@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cards · Aula de Deep Learning</title>
+  <style>
+    :root { --ink:#0d1d32; --paper:#f7f9fc; --line:#dce4ef; --cyan:#16aeca; --violet:#7259d9; --coral:#ef735e; --amber:#df9b27; }
+    * { box-sizing:border-box; } body { margin:0; background:var(--paper); color:var(--ink); font-family:Inter, ui-sans-serif, system-ui, sans-serif; }
+    header { max-width:1240px; margin:auto; padding:34px 24px 18px; display:flex; justify-content:space-between; gap:20px; align-items:end; }
+    .eyebrow { color:var(--cyan); font:800 .68rem ui-monospace,monospace; letter-spacing:.13em; text-transform:uppercase; }
+    h1 { margin:6px 0 0; font-size:clamp(1.8rem,4vw,3.2rem); letter-spacing:-.06em; } header p { max-width:480px; margin:0; color:#52657b; line-height:1.5; }
+    main { max-width:1240px; margin:auto; padding:12px 24px 46px; } .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:16px; }
+    .card { min-height:270px; background:#fff; border:1px solid var(--line); border-radius:22px; padding:22px; box-shadow:0 10px 25px #1b38520b; display:flex; flex-direction:column; break-inside:avoid; }
+    .card::before { content:""; width:44px; height:6px; border-radius:9px; background:var(--accent,var(--cyan)); margin-bottom:20px; } .llm {--accent:var(--violet)} .harness {--accent:var(--cyan)} .model {--accent:var(--coral)} .azure {--accent:#2684c7} .close {--accent:var(--amber)}
+    .number { color:#8190a2; font:800 .68rem ui-monospace,monospace; letter-spacing:.1em; } h2 { margin:8px 0; font-size:1.32rem; letter-spacing:-.04em; } p { margin:0; line-height:1.5; color:#44566c; } .say { margin-top:auto; padding-top:16px; color:var(--ink); font-size:.92rem; font-weight:700; line-height:1.45; }
+    .tip { margin-top:10px; font-size:.82rem; color:#63758a; } code { background:#eef3f8; border-radius:5px; padding:2px 4px; font-family:ui-monospace,monospace; font-size:.8em; }
+    button { border:0; border-radius:9px; padding:9px 12px; background:var(--ink); color:#fff; font-weight:700; cursor:pointer; } @media(max-width:700px){header{align-items:start;flex-direction:column}.card{min-height:230px}} @media print { body{background:#fff} header{padding:16px 0} main{padding:0}.grid{grid-template-columns:repeat(2,1fr);gap:9mm}.card{min-height:62mm;box-shadow:none;border-color:#aebdcc;padding:15px}button{display:none} h1{font-size:24pt} }
+  </style>
+</head>
+<body>
+  <header>
+    <div><div class="eyebrow">Apoio de fala · Redes Neurais e IA</div><h1>Cards da aula</h1></div>
+    <p>Use em sequência, pule os que não couberem no tempo e imprima em duas colunas se quiser levar para a sala.</p>
+    <button onclick="window.print()">Imprimir cards</button>
+  </header>
+  <main><div class="grid">
+    <article class="card llm"><span class="number">01 · ABERTURA</span><h2>Do modelo ao produto</h2><p>Hoje vamos conectar redes neurais, modelos de linguagem, agentes, governança e nuvem.</p><div class="say">“Não vamos olhar só para a rede. Vamos olhar para como ela vira uma aplicação útil e controlada.”</div></article>
+    <article class="card llm"><span class="number">02 · LLM</span><h2>Próximo token</h2><p>Um LLM aprende a estimar qual token tem maior probabilidade de continuar um contexto.</p><div class="say">“Ele não consulta uma lista de respostas: prevê a continuação mais provável.”</div></article>
+    <article class="card llm"><span class="number">03 · ESCALA</span><h2>Parâmetros e contexto</h2><p>Parâmetros são o que foi aprendido no treino. Janela de contexto é o que o modelo consegue considerar nesta conversa.</p><div class="say">“Parâmetros são memória aprendida; contexto é a memória de trabalho do momento.”</div></article>
+    <article class="card model"><span class="number">04 · RNN/LSTM</span><h2>Mini previsão de palavras</h2><p>No exemplo, palavras viram vetores one-hot e a rede prevê uma próxima palavra de um vocabulário pequeno.</p><div class="say">“<code>o modelo prevê</code> → <code>a</code>. É a ideia de próximo token em escala didática, não um LLM.”</div></article>
+    <article class="card harness"><span class="number">05 · HARNESS</span><h2>O modelo não age sozinho</h2><p>O harness define ferramentas, políticas, limites, permissões e registros das ações.</p><div class="say">“O modelo decide; o harness controla o que pode realmente acontecer.”</div></article>
+    <article class="card harness"><span class="number">06 · AO VIVO</span><h2>Mostre a aba Harness</h2><p>Peça ao agente para listar arquiteturas ou criar um exemplo. Mostre política, chamada de ferramenta e resultado.</p><div class="say">“Aqui conseguimos auditar a diferença entre o que o agente sugeriu e o que o sistema executou.”</div></article>
+    <article class="card model"><span class="number">07 · CNN</span><h2>Imagem → classe</h2><p>A CNN aprende padrões espaciais: bordas, curvas e partes de um algarismo.</p><div class="say">“Vamos desenhar um número e observar não só a resposta, mas a confiança em cada classe.”</div></article>
+    <article class="card model"><span class="number">08 · RNN / LSTM</span><h2>Sequência → previsão</h2><p>A ordem dos valores importa. A LSTM usa portas para manter dependências por mais tempo.</p><div class="say">“Se eu embaralho a sequência, geralmente mudo o significado do problema.”</div></article>
+    <article class="card model"><span class="number">09 · AUTOENCODER</span><h2>Comprimir e reconstruir</h2><p>Encoder reduz a entrada a um vetor latente; decoder tenta recriá-la. O erro mostra a diferença.</p><div class="say">“Ele não aprende o rótulo do dígito; aprende como um dígito normal costuma parecer.”</div></article>
+    <article class="card model"><span class="number">10 · GAN</span><h2>Gerar sem copiar</h2><p>Gerador cria pontos; crítico compara distribuição gerada e real. No exemplo, tentamos formar novas luas.</p><div class="say">“O gerador é um falsificador; o crítico é um perito. Os dois melhoram em competição.”</div></article>
+    <article class="card llm"><span class="number">11 · VIBE CODING</span><h2>Intenção vira artefato</h2><p>A pessoa descreve o objetivo; a IA ajuda a criar, revisar e testar. Ainda é preciso validação humana.</p><div class="say">“Vibe coding acelera a primeira versão; responsabilidade técnica continua humana.”</div></article>
+    <article class="card llm"><span class="number">12 · PROVEDORES</span><h2>Modelo não é produto</h2><p>Claude Code, Codex, Copilot e Cursor combinam modelo, ferramentas, contexto e interface de trabalho.</p><div class="say">“Ao escolher uma ferramenta, avaliamos integração, custo, dados, segurança e fluxo de trabalho.”</div></article>
+    <article class="card azure"><span class="number">13 · FOUNDRY</span><h2>Do protótipo à empresa</h2><p>Um projeto reúne implantações de modelos, agentes, conexões, equipe e observabilidade.</p><div class="say">“Na empresa não basta chamar o modelo: precisamos saber quem acessa, qual endpoint atende e quanto isso custa.”</div></article>
+    <article class="card azure"><span class="number">14 · CLI</span><h2>Portal e terminal</h2><p><code>az</code> administra recursos Azure. <code>azd</code> apoia desenvolvimento e implantação. O portal facilita a visualização.</p><div class="say">“O portal torna a arquitetura visível; a CLI torna o processo repetível e automatizável.”</div></article>
+    <article class="card azure"><span class="number">15 · RAG / GRAPHRAG</span><h2>Conhecimento externo</h2><p>RAG recupera trechos relevantes antes de responder. GraphRAG acrescenta relações explícitas entre entidades.</p><div class="say">“O modelo não precisa decorar tudo: ele pode consultar uma fonte autorizada no momento da resposta.”</div></article>
+    <article class="card close"><span class="number">16 · FECHAMENTO</span><h2>Quatro camadas</h2><p>Modelo aprende. Aplicação usa. Harness controla. Plataforma corporativa opera.</p><div class="say">“Uma IA útil não é apenas um modelo poderoso: é um sistema que podemos entender, testar e governar.”</div></article>
+  </div></main>
+</body>
+</html>

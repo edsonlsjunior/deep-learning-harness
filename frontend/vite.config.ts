@@ -9,7 +9,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       // caminhos relativos sao resolvidos pelo Vite a partir do root (frontend/)
-      input: { main: "index.html", apresentacao: "apresentacao.html", apresentacao2: "apresentacao2.html" },
+      input: { main: "index.html", apresentacao: "apresentacao.html", apresentacao2: "apresentacao2.html", cards: "cards-aula.html" },
     },
   },
   server: {
